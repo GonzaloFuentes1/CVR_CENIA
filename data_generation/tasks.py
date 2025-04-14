@@ -1,15 +1,16 @@
 
-import os
 import copy
-import pickle
-import numpy as np
-# import matplotlib.pyplot as plt
-from PIL import Image
-
 import itertools
 import math
+import os
+import pickle
 
 import cv2
+import numpy as np
+
+# import matplotlib.pyplot as plt
+from PIL import Image
+from scipy.special import factorial
 
 from data_generation.shape import Shape
 from data_generation.utils import *
@@ -766,7 +767,7 @@ def task_pos_pos_4(condition='max_cid', axis='y'):
     x = sample_over_range_t(n_samples, np.array([0,1]), size)    
     y = sample_over_range_t(n_samples, np.array([0.1,0.9]), size/3)    
 
-    if np.math.factorial(n_objects-1) < n_samples:
+    if factorial(n_objects-1) < n_samples:
         perms = np.array([np.random.permutation(n_objects-1)]*n_samples)
     else:
         perms = np.array([np.random.permutation(n_objects-1) for i in range(n_samples)])
