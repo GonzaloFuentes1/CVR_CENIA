@@ -7,7 +7,6 @@ import pickle
 
 import cv2
 import numpy as np
-
 # import matplotlib.pyplot as plt
 from PIL import Image
 from scipy.special import factorial

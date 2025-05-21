@@ -1,9 +1,8 @@
 import os
-import numpy as np
-
-from PIL import Image
 
 import cv2
+import numpy as np
+from PIL import Image
 
 
 def cat_lists(lists):
@@ -369,6 +368,25 @@ def render_ooo(xy, size, shape, color, image_size=128):
     images = np.concatenate(images, axis=1)
     
     return images
+
+def render_scene_safe(xy, size, shape, color, image_size=128):
+    """
+    Renderiza múltiples figuras en una sola imagen, asegurando el formato correcto.
+    """
+    # Normalizar colores
+    clean_colors = []
+    for c in color:
+        c = np.array(c).flatten()
+        if c.shape[0] != 3:
+            raise ValueError(f"Color inválido: se esperaba un vector de 3 elementos, pero llegó {c.shape}")
+        clean_colors.append(c)
+
+    # Desenrollar shape: de [[s], [s], ...] → [s, s, ...]
+    clean_shapes = [s[0] if isinstance(s, list) else s for s in shape]
+
+    return render_cv(xy, size, clean_shapes, clean_colors, image_size=image_size)
+
+
 
 
 def save_image_human_exp(images, meta, base_path):

@@ -1,0 +1,33 @@
+Tests
+
+# --- Modo Normal (figuras base) ---
+Normal:
+python generate_dataset_update.py --task_idx 1 --data_dir "dir"
+
+# --- Modo Rigid (polígonos regulares) ---
+Rigid - triángulos:
+python generate_dataset_update.py --task_idx 1 --shape_mode rigid --n_sides 3 --data_dir "dir"
+
+Rigid - pentágonos:
+python generate_dataset_update.py --task_idx 1 --shape_mode rigid --n_sides 5 --data_dir "dir"
+
+Rigid - hexágonos:
+python generate_dataset_update.py --task_idx 1 --shape_mode rigid --n_sides 6 --data_dir "dir"
+
+# --- Modo Smooth (curvas suaves via Fourier) ---
+Smooth - 4 términos:
+python generate_dataset_update.py --task_idx 1 --shape_mode smooth --fourier_terms 4 --data_dir "dir"
+
+Smooth - 10 términos (más complejidad):
+python generate_dataset_update.py --task_idx 1 --shape_mode smooth --fourier_terms 10 --data_dir "dir"
+
+# --- Modo Symm (figuras simétricas) ---
+Symm - rotación activada:
+python generate_dataset_update.py --task_idx 1 --shape_mode symm --data_dir "dir"
+
+# --- Combinaciones adicionales (cambiar tamaño o complejidad) ---
+Smooth - tamaño grande:
+python generate_dataset_update.py --task_idx 1 --shape_mode smooth --max_size 0.5 --min_size 0.3 --data_dir "dir"
+
+Rigid - polígonos pequeños:
+python generate_dataset_update.py --task_idx 1 --shape_mode rigid --n_sides 4 --max_size 0.3 --min_size 0.15 --data_dir "dir"

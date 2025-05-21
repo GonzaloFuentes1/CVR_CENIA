@@ -7,7 +7,6 @@ import pickle
 
 import cv2
 import numpy as np
-
 # import matplotlib.pyplot as plt
 from PIL import Image
 from scipy.special import factorial
@@ -9381,6 +9380,69 @@ def task_color_sym_2(condition='xyc'):
     color[-1,2,0] = h_
 
     return xy, size, shape, color
+
+
+################################################################################################
+
+def create_shape(shape_mode='normal',
+                 radius=0.5, hole_radius=0.05,
+                 n_sides=None, fourier_terms=20,
+                 symm_rotate=True):
+    if shape_mode == 'normal':
+        return Shape(radius=radius, hole_radius=hole_radius)
+
+    if shape_mode == 'curl':
+        return ShapeCurl(radius=radius, hole_radius=hole_radius)
+
+    if shape_mode == 'rigid':
+        n_sides = n_sides or np.random.randint(3, 7)
+        s = Shape(randomize=False)
+        s.rigid_transform(type='polygon', points=n_sides, rotate=1)
+        return s
+
+    if shape_mode == 'smooth':
+        s = Shape(radius=radius, hole_radius=hole_radius)
+        s.smooth(fourier_terms=fourier_terms)
+        return s
+
+    if shape_mode == 'symm':
+        s = Shape(radius=radius, hole_radius=hole_radius)
+        s.symmetrize(rotate=symm_rotate)
+        return s
+
+    raise ValueError(f"shape_mode '{shape_mode}' no reconocido")
+
+
+def decorate_shapes(shapes, max_size=0.4, min_size=None):
+    """
+    Adorna N figuras:
+       • size  : (N, 1)
+       • xy    : (N, 1, 2)
+       • color : lista de N colores (cada uno shape (1,3))
+    Devuelve (xy, size, shape_wrapped, colors)
+    """
+    n = len(shapes)
+    min_size = max_size/2 if min_size is None else min_size
+
+    size = np.random.rand(n) * (max_size - min_size) + min_size
+    x    = np.random.rand(n) * (1 - size) + size/2
+    y    = np.random.rand(n) * (1 - size) + size/2
+
+    xy   = np.stack([x, y], 1)[:, None, :]
+    size = size[:, None]
+
+    for s in shapes:
+        s.rotate(np.random.rand()*2*np.pi)
+        if np.random.rand() < 0.5:
+            s.flip()
+
+    colors = sample_random_colors(n)
+    colors = [colors[i:i+1] for i in range(n)]
+
+    shape_wrapped = [[s] for s in shapes]   # mantienes tu formato
+    return xy, size, shape_wrapped, colors
+
+
 
 
 

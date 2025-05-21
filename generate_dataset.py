@@ -1,18 +1,16 @@
 
 import argparse
-import os
 import copy
-import pickle
 import logging
-import numpy as np
+import os
+import pickle
 
+import numpy as np
 from PIL import Image
 
-
-from data_generation.tasks import TASKS
 from data_generation.generalization_tasks import TASKS as TASKS_GEN
+from data_generation.tasks import TASKS
 from data_generation.utils import render_ooo
-
 
 TASKS_IDX={
     ### elementary
@@ -119,7 +117,9 @@ TASKS_IDX={
     99: "task_pos_flip_1",
     100: "task_pos_flip_2",
     101: "task_flip_contact_1",
-    102: "task_flip_contact_2",    
+    102: "task_flip_contact_2",
+    #SVRT 
+    103: "task_svrt_1",    
 }
 
 

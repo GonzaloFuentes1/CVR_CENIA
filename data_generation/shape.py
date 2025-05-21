@@ -1,10 +1,10 @@
 import copy
-
-import numpy as np
-import matplotlib.pyplot as plt
-from numpy import linalg
-import cv2
 import time
+
+import cv2
+import matplotlib.pyplot as plt
+import numpy as np
+from numpy import linalg
 
 gap_max = 0.006
 
@@ -374,18 +374,22 @@ class Shape(object):
 
     def clone(self):
         s = self.__class__(randomize=False)
+
         s.nb_pixels = copy.deepcopy(self.nb_pixels)
         s.x_pixels = np.copy(self.x_pixels)
         s.y_pixels = np.copy(self.y_pixels)
-        s.n_pixels1 = copy.deepcopy(self.n_pixels1)
-        s.n_pixels2 = copy.deepcopy(self.n_pixels2)
-        s.n_pixels3 = copy.deepcopy(self.n_pixels3)
-        s.n_pixels4 = copy.deepcopy(self.n_pixels4)
+
+        # Copiar atributos opcionales si existen
+        for attr in ['n_pixels1', 'n_pixels2', 'n_pixels3', 'n_pixels4',
+                    'bb', 'circle_center', 'max_radius']:
+            if hasattr(self, attr):
+                setattr(s, attr, copy.deepcopy(getattr(self, attr)))
+
         s.wh = copy.deepcopy(self.wh)
-        
         s.transformations = copy.deepcopy(self.transformations)
-        
+
         return s
+
     
     def flip(self):
         self.x_pixels = - self.x_pixels
