@@ -114,7 +114,6 @@ class Shape(object):
             self.n_pixels4 = len(self.x_pixels)
             err4 = self.generate_part_part(radius, hole_radius, x4, y4, x1, y1)
 
-
     def randomize(self):
         self.x_pixels = []
         self.y_pixels = []
@@ -131,10 +130,11 @@ class Shape(object):
         ### random rotation
         self.rotate(np.random.rand() * np.pi * 2)
 
-        if self.sym_rot > 1:
-            self.rot_symmetrize(self.sym_rot)
-        if self.sym_flip:
-            self.flip_symmetrize()
+        # Este código no hace nada (funciones no implementadas)
+        # if self.sym_rot > 1:
+        #     self.rot_symmetrize(self.sym_rot)
+        # if self.sym_flip:
+        #     self.flip_symmetrize()
         
         self.x_pixels = self.x_pixels - (self.x_pixels.max() + self.x_pixels.min())/2
         self.y_pixels = self.y_pixels - (self.y_pixels.max() + self.y_pixels.min())/2
@@ -148,6 +148,167 @@ class Shape(object):
         
         self.wh = (1, 1)
 
+        self.transformations = []
+
+    def smooth(self, n_sampled_points = 100, fourier_terms = 20):
+
+        # Recuperar figura base
+        base_contour = self.get_contour()
+        length = len(base_contour)
+
+        # Samplear puntos equiespaciados
+        idx = np.linspace(0, length-1, n_sampled_points, dtype=int)
+        t_sel = np.linspace(0, 1, n_sampled_points)
+        x_sel = base_contour[idx, 0]
+        y_sel = base_contour[idx, 1]
+
+        # Ajuste de Fourier
+        cx = self.__fit_fourier(t_sel, x_sel, fourier_terms)
+        cy = self.__fit_fourier(t_sel, y_sel, fourier_terms)
+
+        t_curve = np.linspace(0, 1, n_sampled_points)
+        x_curve = self.__eval_fourier(cx, t_curve)
+        y_curve = self.__eval_fourier(cy, t_curve)
+
+        # Normalizar figura
+        x_curve -= (x_curve.max() + x_curve.min()) / 2
+        y_curve -= (y_curve.max() + y_curve.min()) / 2
+        x_curve /= (x_curve.max() - x_curve.min())
+        y_curve /= (y_curve.max() - y_curve.min())
+
+        self.x_pixels = x_curve
+        self.y_pixels = y_curve
+        self.nb_pixels = len(x_curve)
+        self.wh = (1, 1)
+        self.transformations = []
+
+    def __fit_fourier(self, t, f, N):
+        A = [np.ones_like(t)]
+        for k in range(1, N+1):
+            A.append(np.cos(2 * np.pi * k * t))
+            A.append(np.sin(2 * np.pi * k * t))
+        A = np.stack(A, axis=1)
+        coeffs = np.linalg.lstsq(A, f, rcond=None)[0]
+        return coeffs
+    
+    def __eval_fourier(self, coeffs, t):
+        N = (len(coeffs) - 1) // 2
+        result = coeffs[0] * np.ones_like(t)
+        for k in range(1, N+1):
+            result += coeffs[2*k-1] * np.cos(2 * np.pi * k * t) + coeffs[2*k] * np.sin(2 * np.pi * k * t)
+        return result
+
+    def rigid_transform(self, type = 'polygon', points = 3, rotate = 0):
+
+        # Alterar figura según tipo de figura rígida deseada
+        if type == 'polygon':
+            theta = np.linspace(0, 2 * np.pi, points, endpoint=False)
+            # Rota para que un vértice apunte hacia arriba
+            theta += np.pi / 2
+            self.x_pixels = np.cos(theta)
+            self.y_pixels = np.sin(theta)
+
+        elif type == 'arrow':
+            # Forma de flecha "↣"
+            pts = np.array([
+                [-0.5,  0.2],
+                [-0.5, -0.2],
+                [ 0.2, -0.2],
+                [ 0.2, -0.5],
+                [ 0.5,  0.0],
+                [ 0.2,  0.5],
+                [ 0.2,  0.2],
+            ])
+            self.x_pixels, self.y_pixels = pts[:, 0], pts[:, 1]
+
+        elif type == 'irregular':
+            # Generamos poliedro irregular a partir de figura base
+            # Seleccionamos points puntos y los conectamos
+            idx = np.linspace(0, len(self.x_pixels)-1, points + 1, dtype=int)
+            self.x_pixels = self.x_pixels[idx]
+            self.y_pixels = self.y_pixels[idx]
+
+        if rotate:
+            # Aplicar rotación en ángulo aleatorio
+            angle = np.random.rand() * 2 * np.pi
+            self.rotate(angle)
+
+        self.nb_pixels = len(self.x_pixels)
+        self.x_pixels = np.array(self.x_pixels)
+        self.y_pixels = np.array(self.y_pixels)
+
+        # Centrar
+        self.x_pixels -= (self.x_pixels.max() + self.x_pixels.min()) / 2
+        self.y_pixels -= (self.y_pixels.max() + self.y_pixels.min()) / 2
+
+        # Normalizar a [-0.5, 0.5] en la dimensión más grande
+        w = self.x_pixels.max() - self.x_pixels.min()
+        h = self.y_pixels.max() - self.y_pixels.min()
+        scale = 1 / max(w, h)
+        self.x_pixels *= scale
+        self.y_pixels *= scale
+
+        self.bb = (w, h)
+        self.wh = (w, h)
+        self.transformations = []
+
+    def symmetrize(self, rotate = 0):
+
+        if self.x_pixels[0] < 0:   
+            # Tomamos un lado de la figura
+            mask = self.x_pixels >= 0
+
+            # Copiamos el lado original
+            x_copy = self.x_pixels[mask]
+            y_copy = self.y_pixels[mask]
+
+            self.x_pixels = self.x_pixels[mask][::-1]
+            self.y_pixels = self.y_pixels[mask][::-1]
+
+            # Reflejamos
+            self.flip()
+
+            # Concatenamos nuevamente el lado original sin reflejar
+            self.x_pixels = np.concatenate([self.x_pixels, x_copy])
+            self.y_pixels = np.concatenate([self.y_pixels, y_copy])
+
+        elif self.x_pixels[0] >= 0:
+
+            mask = self.x_pixels < 0
+            
+            # Copiamos el lado original
+            x_copy = self.x_pixels[mask]
+            y_copy = self.y_pixels[mask]
+
+            self.x_pixels = self.x_pixels[mask][::-1]
+            self.y_pixels = self.y_pixels[mask][::-1]
+
+            # Reflejamos
+            self.flip()
+
+            # Concatenamos nuevamente el lado original sin reflejar
+            self.x_pixels = np.concatenate([self.x_pixels, x_copy])
+            self.y_pixels = np.concatenate([self.y_pixels, y_copy])
+
+        if rotate:
+            # Aplicar rotación en ángulo aleatorio
+            angle = np.random.rand() * 2 * np.pi
+            self.rotate(angle)
+
+        self.nb_pixels = len(self.x_pixels)
+        # Centrar
+        self.x_pixels -= (self.x_pixels.max() + self.x_pixels.min()) / 2
+        self.y_pixels -= (self.y_pixels.max() + self.y_pixels.min()) / 2
+
+        # Normalizar a [-0.5, 0.5] en la dimensión más grande
+        w = self.x_pixels.max() - self.x_pixels.min()
+        h = self.y_pixels.max() - self.y_pixels.min()
+        scale = 1 / max(w, h)
+        self.x_pixels *= scale
+        self.y_pixels *= scale
+
+        self.bb = (w, h)
+        self.wh = (w, h)
         self.transformations = []
 
     def flip_diag(self):
@@ -177,7 +338,6 @@ class Shape(object):
         self.bb = (w, h)
         self.wh = (w/temp_size, h/temp_size)
 
-    
     def get_bb(self):
         w = self.x_pixels.max() - self.x_pixels.min()
         h = self.y_pixels.max() - self.y_pixels.min()
@@ -244,15 +404,6 @@ class Shape(object):
 
         for i in range(1,len(xy)-1):
             xy[i] = (xy[i+1] + xy[i-1])/2 + (np.random.rand()-0.5)*(xy[i+1] - xy[i-1])[::-1] * np.array([-1,1]) /np.linalg.norm(xy[i+1] - xy[i-1]) * 0.07
-
-        self.x_pixels = xy[:,0]
-        self.y_pixels = xy[:,1]
-
-    def smooth(self, window=10):
-        xy = np.stack([self.x_pixels, self.y_pixels], 1)
-        xy = np.concatenate([xy, xy[1:window]], 0)
-        xy = xy.cumsum(0)
-        xy = (xy[window:] - xy[:-window])/window
 
         self.x_pixels = xy[:,0]
         self.y_pixels = xy[:,1]
@@ -326,10 +477,11 @@ class ShapeCurl(Shape):
 
         self.subsample()
         
-        if self.sym_rot > 1:
-            self.rot_symmetrize(self.sym_rot)
-        if self.sym_flip:
-            self.flip_symmetrize()
+        # Este código no hace nada
+        # if self.sym_rot > 1:
+        #     self.rot_symmetrize(self.sym_rot)
+        # if self.sym_flip:
+        #     self.flip_symmetrize()
 
         self.x_pixels = self.x_pixels - (self.x_pixels.max() + self.x_pixels.min())/2
         self.y_pixels = self.y_pixels - (self.y_pixels.max() + self.y_pixels.min())/2
@@ -345,3 +497,13 @@ class ShapeCurl(Shape):
 
 
         self.transformations = []
+
+
+# test
+# if __name__ == "__main__":
+#     shape = Shape()
+#     shape.symmetrize(rotate=True)
+#     contour = shape.get_contour()
+#     plt.plot(contour[:, 0], contour[:, 1])
+#     plt.axis('equal')
+#     plt.show()
