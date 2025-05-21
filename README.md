@@ -6,7 +6,7 @@ This reposity details the Compositional Visual Relations (CVR) benchmark.
 ## Funcionalidades nuevas clase `Shape`
 
 * `smooth`: Suaviza la figura utilizando Fourier. Requiere como argumentos 
-  - `n_sampled_points`: número de puntos muestreados. Valor por defecto: 1000.
+  - `n_sampled_points`: número de puntos muestreados. Valor por defecto: 100.
   - `fourier_terms`: número de términos de Fourier. Valor por defecto: 20.
 
 * `rigid_transform`: Transforma la figura en una figura rígida. Requiere como argumentos
