@@ -11,6 +11,8 @@ from data_generation.utils import render_scene_safe
 # Mapeo de índice entero → nombre de la tarea
 TASKS_IDX = {
     1: "task_svrt_1",
+    2: "task_svrt_2",
+    3: "task_svrt_3",
     # puedes ir agregando más como:
     # 2: "task_svrt_2",
     # 3: "task_symmetry_rule",
@@ -50,7 +52,7 @@ if __name__ == '__main__':
     parser.add_argument('--train_size', type=int, default=4)
     parser.add_argument('--val_size', type=int, default=4)
     parser.add_argument('--test_size', type=int, default=4)
-    parser.add_argument('--image_size', type=int, default=256)
+    parser.add_argument('--image_size', type=int, default=128)
 
     # Argumentos para generación de figuras
     parser.add_argument('--shape_mode', type=str, default='normal',

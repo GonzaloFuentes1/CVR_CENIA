@@ -276,7 +276,7 @@ def sample_contact(s1, s2, scale, direction=0):
     return xy2
 
 
-def sample_contact_many(shapes, sizes, a=None):
+def sample_contact_many(shapes, sizes, image_dim=128, a=None):
     n_objects = len(shapes)
     contours = [shapes[i].get_contour() * sizes[i] for i in range(n_objects)]
 
@@ -306,7 +306,7 @@ def sample_contact_many(shapes, sizes, a=None):
         idx_min_clump, idx_min_object = idx_min // s_, idx_min % s_
         p_clump = clump[idx_p_contact_clump][idx_min_clump]
         p_obj = contours[i][idx_p_contact_object][idx_min_object]
-        new_pos = (p_clump - p_obj)*(1-4/128)
+        new_pos = (p_clump - p_obj)*(1-4/image_dim)
         
         clump = np.concatenate([clump, contours[i]+new_pos[None,:]], 0)
         bb = clump.min(0), clump.max(0)
