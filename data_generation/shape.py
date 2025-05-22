@@ -208,6 +208,13 @@ class Shape(object):
             self.x_pixels = np.cos(theta)
             self.y_pixels = np.sin(theta)
 
+        elif type == 'irregular':
+            # Generamos poliedro irregular a partir de figura base
+            # Seleccionamos points puntos y los conectamos
+            idx = np.linspace(0, len(self.x_pixels)-1, points + 1, dtype=int)
+            self.x_pixels = self.x_pixels[idx]
+            self.y_pixels = self.y_pixels[idx]
+
         elif type == 'arrow':
             # Forma de flecha "↣"
             pts = np.array([
@@ -221,12 +228,16 @@ class Shape(object):
             ])
             self.x_pixels, self.y_pixels = pts[:, 0], pts[:, 1]
 
-        elif type == 'irregular':
-            # Generamos poliedro irregular a partir de figura base
-            # Seleccionamos points puntos y los conectamos
-            idx = np.linspace(0, len(self.x_pixels)-1, points + 1, dtype=int)
-            self.x_pixels = self.x_pixels[idx]
-            self.y_pixels = self.y_pixels[idx]
+        elif type == 'arrow_line':
+            pts = np.array([
+                [0.5, 0.0],
+                [-0.5, 0.0],
+                [-0.2, 0.3],
+                [-0.5, 0.0],
+                [-0.2, -0.3],
+                [-0.5, 0.0],
+            ])
+            self.x_pixels, self.y_pixels = pts[:, 0], pts[:, 1]
 
         if rotate:
             # Aplicar rotación en ángulo aleatorio
@@ -504,10 +515,10 @@ class ShapeCurl(Shape):
 
 
 # test
-# if __name__ == "__main__":
-#     shape = Shape()
-#     shape.symmetrize(rotate=True)
-#     contour = shape.get_contour()
-#     plt.plot(contour[:, 0], contour[:, 1])
-#     plt.axis('equal')
-#     plt.show()
+if __name__ == "__main__":
+    shape = Shape()
+    shape.rigid_transform(type='arrow_line', points=5, rotate=True)
+    contour = shape.get_contour()
+    plt.plot(contour[:, 0], contour[:, 1])
+    plt.axis('equal')
+    plt.show()

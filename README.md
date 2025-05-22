@@ -5,16 +5,16 @@ This reposity details the Compositional Visual Relations (CVR) benchmark.
 
 ## Funcionalidades nuevas clase `Shape`
 
-* `smooth`: Suaviza la figura utilizando Fourier. Requiere como argumentos 
+* `smooth`: Suaviza la figura utilizando Fourier. Toma como argumentos 
   - `n_sampled_points`: número de puntos muestreados. Valor por defecto: 100.
   - `fourier_terms`: número de términos de Fourier. Valor por defecto: 20.
 
-* `rigid_transform`: Transforma la figura en una figura rígida. Requiere como argumentos
-  - `type`: tipo de transformación. Por ahora, puede ser `'polygon'` para generar polígonos regulares, `'arrow'` para generar flechas (con área), e `'irregular'` para generar polígonos irregulares. Valor por defecto: `'polygon'`. **(nota: `'arrow_line'` quedó sin implementar, pues genera problemas con el contour. En el ipynb eso se manejaba manualmente, pero sería necesario buscar una forma más sistemática de hacerlo en caso de querer implementar figuras sin área)**
+* `rigid_transform`: Transforma la figura en una figura rígida. Toma como argumentos
+  - `type`: tipo de transformación. Por ahora, puede ser `'polygon'` para generar polígonos regulares, `'irregular'` para generar polígonos irregulares, `arrow` para generar flechas (con área), y `arrow_line` para generar flechas sin área. Valor por defecto: `'polygon'`. 
   - `points`: número de vértices para casos en que corresponde (`'polygon'` o `'irregular'`). Valor por defecto: 3.
   - `rotate`: flag que indica si se debe rotar la figura. En caso de ser `True`, la figura se rotará aleatoriamente, lo cual resulta útil para figuras como `'arrow'`, que se generan siempre idénticas. Valor por defecto: 0. 
 
-* `symmetrize`: Genera una figura con simetría axial con respecto al eje $y$ a partir de la figura original. Requiere como argumentos
+* `symmetrize`: Genera una figura con simetría axial con respecto al eje $y$ a partir de la figura original. Toma como argumentos
   - `rotate`: flag que indica si se debe rotar la figura. En caso de ser `True`, la figura se rotará aleatoriamente, lo cual podría ser útil si se busca simetría con respecto a distintos ejes. Valor por defecto: 0.
 
 ## Release Notes
