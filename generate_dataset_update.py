@@ -13,6 +13,9 @@ TASKS_IDX = {
     1: "task_svrt_1",
     2: "task_svrt_2",
     3: "task_svrt_3",
+    4: "task_svrt_4",
+    5: "task_svrt_5",
+    7: "task_svrt_7",
     # puedes ir agregando más como:
     # 2: "task_svrt_2",
     # 3: "task_symmetry_rule",
@@ -60,35 +63,73 @@ if __name__ == '__main__':
     parser.add_argument('--radius', type=float, default=0.5)
     parser.add_argument('--hole_radius', type=float, default=0.05)
     parser.add_argument('--n_sides', type=int, default=5)
-    parser.add_argument('--fourier_terms', type=int, default=20)
+    parser.add_argument('--fourier_terms', type=int, default=4)
     parser.add_argument('--max_size', type=float, default=0.4)
     parser.add_argument('--min_size', type=float, default=0.2)
+    parser.add_argument('--color', type=bool, default=False)
+    parser.add_argument('--rigid_type', type=str, default='polygon')
 
     args = parser.parse_args()
     logging.info(f'JOB PID {os.getpid()}')
 
-    # Obtener nombre y función desde TASKS_SVRT
-    try:
-        task_name = TASKS_IDX[args.task_idx]
-    except KeyError:
-        raise ValueError(f"Tarea con índice {args.task_idx} no registrada en TASKS_IDX.")
+    task_idx = args.task_idx
 
-    try:
-        task_fn_base = next(fn for name, fn, _ in TASKS_SVRT if name == task_name)
-    except StopIteration:
-        raise ValueError(f"No se encontró la función para {task_name} en TASKS_SVRT.")
+    if task_idx == 0:
+        # Generar dataset para todas las tareas
+        for i in range(1, len(TASKS_IDX) + 1):
+            
+            try:
+                task_name = TASKS_IDX[i]
+            except KeyError:
+                raise ValueError(f"Tarea con índice {i} no registrada en TASKS_IDX.")
+            
+            try:
+                task_fn_base = next(fn for name, fn, _ in TASKS_SVRT if name == task_name)
+            except StopIteration:
+                raise ValueError(f"No se encontró la función para {task_name} en TASKS_SVRT.")
+            
+            # Generar función con hiperparámetros inyectados
+            def task_fn():
+                return task_fn_base(
+                    shape_mode=args.shape_mode,
+                    radius=args.radius,
+                    hole_radius=args.hole_radius,
+                    n_sides=args.n_sides,
+                    fourier_terms=args.fourier_terms,
+                    max_size=args.max_size,
+                    min_size=args.min_size,
+                    color=args.color,
+                    rigid_type=args.rigid_type
+                )
+            generate_dataset(task_name, task_fn, args.data_dir, args.image_size,
+                             args.seed, args.train_size, args.val_size, args.test_size)
 
-    # Generar función con hiperparámetros inyectados
-    def task_fn():
-        return task_fn_base(
-            shape_mode=args.shape_mode,
-            radius=args.radius,
-            hole_radius=args.hole_radius,
-            n_sides=args.n_sides,
-            fourier_terms=args.fourier_terms,
-            max_size=args.max_size,
-            min_size=args.min_size
-        )
+    else:
+        # Obtener nombre y función desde TASKS_SVRT
+        try:
+            task_name = TASKS_IDX[args.task_idx]
+        except KeyError:
+            raise ValueError(f"Tarea con índice {args.task_idx} no registrada en TASKS_IDX.")
 
-    generate_dataset(task_name, task_fn, args.data_dir, args.image_size,
-                     args.seed, args.train_size, args.val_size, args.test_size)
+        try:
+            task_fn_base = next(fn for name, fn, _ in TASKS_SVRT if name == task_name)
+        except StopIteration:
+            raise ValueError(f"No se encontró la función para {task_name} en TASKS_SVRT.")
+
+        # Generar función con hiperparámetros inyectados
+        def task_fn():
+            return task_fn_base(
+                shape_mode=args.shape_mode,
+                radius=args.radius,
+                hole_radius=args.hole_radius,
+                n_sides=args.n_sides,
+                fourier_terms=args.fourier_terms,
+                max_size=args.max_size,
+                min_size=args.min_size,
+                color=args.color,
+                rigid_type=args.rigid_type
+            )
+
+
+        generate_dataset(task_name, task_fn, args.data_dir, args.image_size,
+                            args.seed, args.train_size, args.val_size, args.test_size)
