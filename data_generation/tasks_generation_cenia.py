@@ -40,6 +40,7 @@ def create_shape(
 
     raise ValueError(f"shape_mode '{shape_mode}' no reconocido")
 
+
 # ---------- Decorador de figuras ----------
 
 def decorate_shapes(shapes, max_size=0.4, min_size=None, size=False, rotate=False, color=False, flip=False):
@@ -70,12 +71,13 @@ def decorate_shapes(shapes, max_size=0.4, min_size=None, size=False, rotate=Fals
     if color:
         colors = sample_random_colors(n)
         colors = [colors[i:i+1] for i in range(n)]
-    else: 
+    else:
         colors = [np.array([0, 0, 0], dtype=np.float32).reshape(1, 3) for _ in range(n)]
 
     shape_wrapped = [[s] for s in shapes]
 
     return xy, size, shape_wrapped, colors
+
 
 # ---------- Tarea SVRT 1: mismo tipo vs distinto tipo ----------
 
@@ -108,12 +110,16 @@ def task_svrt_1(
 
     return sample_neg, sample_pos
 
+
+# ---------- Tarea SVRT 2 ----------
+
 def task_svrt_2(
     shape_mode: str = 'normal',
     radius: float = 0.5,
     hole_radius: float = 0.05,
     n_sides: int = 5,
     fourier_terms: int = 20,
+    symm_rotate: bool = True,
     poly_min_sides: int = 3,
     poly_max_sides: int = 10,
     max_size: float = 0.4,
@@ -122,58 +128,14 @@ def task_svrt_2(
     rigid_type: str = 'polygon'
 ):
     """
-    SVRT #2 – Devuelve (sample_neg, sample_pos).
-    sample_pos: una figura completamente dentro de otra (clase 1)
-    sample_neg: dos figuras separadas (clase 0)
+    SVRT #2 – Devuelve...
     """
+    sample_pos = False
+    sample_neg = False
+    return sample_pos, sample_neg
 
-    # Elegir n_sides diferentes si estamos usando 'rigid'
-    if shape_mode == 'rigid':
-        outer_sides = n_sides
-        inner_sides = np.random.choice([k for k in range(poly_min_sides, poly_max_sides) if k != n_sides])
-    else:
-        outer_sides = inner_sides = n_sides
 
-    # Positivo: inner dentro de outer con posición aleatoria
-    outer = create_shape(shape_mode, rigid_type, radius, hole_radius, outer_sides, fourier_terms)
-    inner = create_shape(shape_mode, rigid_type, radius, hole_radius, inner_sides, fourier_terms)
-
-    size_outer = max_size * 0.9
-    size_inner = size_outer * 0.3
-
-    # posición global del centro del outer
-    xy_outer = np.random.rand(2) * (1 - size_outer) + size_outer / 2
-
-    # obtener posición relativa del inner dentro del outer
-    xy_inner_rel = sample_position_inside_1(outer, inner, scale=size_inner / size_outer)
-    if len(xy_inner_rel) == 0:
-        xy_inner = xy_outer + 0.01  # fallback
-    else:
-        xy_inner = xy_inner_rel[0] * size_outer + xy_outer
-
-    xy_pos = np.stack([xy_outer, xy_inner])[:, None, :]
-    size_pos = np.array([[size_outer], [size_inner]])
-    shapes_pos = [[outer], [inner]]
-    if color:
-        color_pos = sample_random_colors(2)
-        color_pos = [color_pos[i:i+1] for i in range(2)]
-    else:
-        color_pos = [np.array([0, 0, 0], dtype=np.float32).reshape(1, 3) for _ in range(2)]
-    sample_pos = (xy_pos, size_pos, shapes_pos, color_pos)
-
-    # Negativo: dos figuras separadas (también con distintos n_sides si es 'rigid')
-    if shape_mode == 'rigid':
-        n_a = n_sides
-        n_b = np.random.choice([k for k in range(poly_min_sides, poly_max_sides) if k != n_sides])
-        shape_a = create_shape(shape_mode, rigid_type, radius, hole_radius, n_a, fourier_terms)
-        shape_b = create_shape(shape_mode, rigid_type, radius, hole_radius, n_b, fourier_terms)
-    else:
-        shape_a = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms)
-        shape_b = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms)
-
-    sample_neg = decorate_shapes([shape_a, shape_b], max_size=max_size, min_size=min_size, color=color)
-
-    return sample_neg, sample_pos
+# ---------- Tarea SVRT 3 ----------
 
 def task_svrt_3(
     shape_mode: str = 'normal',
@@ -255,6 +217,79 @@ def task_svrt_3(
 
     return sample_neg, sample_pos
 
+
+# ---------- Tarea SVRT 4 ----------
+
+def task_svrt_4(
+    shape_mode: str = 'normal',
+    radius: float = 0.5,
+    hole_radius: float = 0.05,
+    n_sides: int = 5,
+    fourier_terms: int = 20,
+    poly_min_sides: int = 3,
+    poly_max_sides: int = 10,
+    max_size: float = 0.4,
+    min_size: float | None = 0.2,
+    color: bool = False,
+    rigid_type: str = 'polygon'
+):
+    """
+    SVRT #4 – Devuelve (sample_neg, sample_pos).
+    sample_pos: una figura completamente dentro de otra (clase 1)
+    sample_neg: dos figuras separadas (clase 0)
+    """
+
+    # Elegir n_sides diferentes si estamos usando 'rigid'
+    if shape_mode == 'rigid':
+        outer_sides = n_sides
+        inner_sides = np.random.choice([k for k in range(poly_min_sides, poly_max_sides) if k != n_sides])
+    else:
+        outer_sides = inner_sides = n_sides
+
+    # Positivo: inner dentro de outer con posición aleatoria
+    outer = create_shape(shape_mode, rigid_type, radius, hole_radius, outer_sides, fourier_terms)
+    inner = create_shape(shape_mode, rigid_type, radius, hole_radius, inner_sides, fourier_terms)
+
+    size_outer = max_size * 0.9
+    size_inner = size_outer * 0.3
+
+    # posición global del centro del outer
+    xy_outer = np.random.rand(2) * (1 - size_outer) + size_outer / 2
+
+    # obtener posición relativa del inner dentro del outer
+    xy_inner_rel = sample_position_inside_1(outer, inner, scale=size_inner / size_outer)
+    if len(xy_inner_rel) == 0:
+        xy_inner = xy_outer + 0.01  # fallback
+    else:
+        xy_inner = xy_inner_rel[0] * size_outer + xy_outer
+
+    xy_pos = np.stack([xy_outer, xy_inner])[:, None, :]
+    size_pos = np.array([[size_outer], [size_inner]])
+    shapes_pos = [[outer], [inner]]
+    if color:
+        color_pos = sample_random_colors(2)
+        color_pos = [color_pos[i:i+1] for i in range(2)]
+    else:
+        color_pos = [np.array([0, 0, 0], dtype=np.float32).reshape(1, 3) for _ in range(2)]
+    sample_pos = (xy_pos, size_pos, shapes_pos, color_pos)
+
+    # Negativo: dos figuras separadas (también con distintos n_sides si es 'rigid')
+    if shape_mode == 'rigid':
+        n_a = n_sides
+        n_b = np.random.choice([k for k in range(poly_min_sides, poly_max_sides) if k != n_sides])
+        shape_a = create_shape(shape_mode, rigid_type, radius, hole_radius, n_a, fourier_terms)
+        shape_b = create_shape(shape_mode, rigid_type, radius, hole_radius, n_b, fourier_terms)
+    else:
+        shape_a = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms)
+        shape_b = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms)
+
+    sample_neg = decorate_shapes([shape_a, shape_b], max_size=max_size, min_size=min_size, color=color)
+
+    return sample_neg, sample_pos
+
+
+# ---------- Tarea SVRT 5 ----------
+
 def task_svrt_5(
     shape_mode: str = 'normal',
     radius: float = 0.5,
@@ -284,6 +319,33 @@ def task_svrt_5(
     sample_neg = decorate_shapes(shapes, max_size=max_size, min_size=min_size, color=color)
 
     return sample_neg, sample_pos
+
+
+# ---------- Tarea SVRT 6 ----------
+
+def task_svrt_6(
+    shape_mode: str = 'normal',
+    radius: float = 0.5,
+    hole_radius: float = 0.05,
+    n_sides: int = 5,
+    fourier_terms: int = 20,
+    symm_rotate: bool = True,
+    poly_min_sides: int = 3,
+    poly_max_sides: int = 10,
+    max_size: float = 0.4,
+    min_size: float | None = 0.2,
+    color: bool = False,
+    rigid_type: str = 'polygon'
+):
+    """
+    SVRT #6 – Devuelve...
+    """
+    sample_pos = False
+    sample_neg = False
+    return sample_neg, sample_pos
+
+
+# ---------- Tarea SVRT 7 ----------
 
 def task_svrt_7(
     shape_mode: str = 'normal',
@@ -319,12 +381,415 @@ def task_svrt_7(
 
     return sample_neg, sample_pos
 
-# ---------- Registro de tareas ----------
 
+# ---------- Tarea SVRT 8 ----------
+
+def task_svrt_8(
+    shape_mode: str = 'normal',
+    radius: float = 0.5,
+    hole_radius: float = 0.05,
+    n_sides: int = 5,
+    fourier_terms: int = 20,
+    symm_rotate: bool = True,
+    poly_min_sides: int = 3,
+    poly_max_sides: int = 10,
+    max_size: float = 0.4,
+    min_size: float | None = 0.2,
+    color: bool = False,
+    rigid_type: str = 'polygon'
+):
+    """
+    SVRT #8 – Devuelve...
+    """
+    sample_pos = False
+    sample_neg = False
+    return sample_neg, sample_pos
+
+
+# ---------- Tarea SVRT 9 ----------
+
+def task_svrt_9(
+    shape_mode: str = 'normal',
+    radius: float = 0.5,
+    hole_radius: float = 0.05,
+    n_sides: int = 5,
+    fourier_terms: int = 20,
+    symm_rotate: bool = True,
+    poly_min_sides: int = 3,
+    poly_max_sides: int = 10,
+    max_size: float = 0.4,
+    min_size: float | None = 0.2,
+    color: bool = False,
+    rigid_type: str = 'polygon'
+):
+    """
+    SVRT #9 – Devuelve...
+    """
+    sample_pos = False
+    sample_neg = False
+    return sample_neg, sample_pos
+
+
+# ---------- Tarea SVRT 10 ----------
+
+def task_svrt_10(
+    shape_mode: str = 'normal',
+    radius: float = 0.5,
+    hole_radius: float = 0.05,
+    n_sides: int = 5,
+    fourier_terms: int = 20,
+    symm_rotate: bool = True,
+    poly_min_sides: int = 3,
+    poly_max_sides: int = 10,
+    max_size: float = 0.4,
+    min_size: float | None = 0.2,
+    color: bool = False,
+    rigid_type: str = 'polygon'
+):
+    """
+    SVRT #10 – Devuelve...
+    """
+    sample_pos = False
+    sample_neg = False
+    return sample_neg, sample_pos
+
+
+# ---------- Tarea SVRT 11 ----------
+
+def task_svrt_11(
+    shape_mode: str = 'normal',
+    radius: float = 0.5,
+    hole_radius: float = 0.05,
+    n_sides: int = 5,
+    fourier_terms: int = 20,
+    symm_rotate: bool = True,
+    poly_min_sides: int = 3,
+    poly_max_sides: int = 10,
+    max_size: float = 0.4,
+    min_size: float | None = 0.2,
+    color: bool = False,
+    rigid_type: str = 'polygon'
+):
+    """
+    SVRT #11 – Devuelve...
+    """
+    sample_pos = False
+    sample_neg = False
+    return sample_neg, sample_pos
+
+
+# ---------- Tarea SVRT 12 ----------
+
+def task_svrt_12(
+    shape_mode: str = 'normal',
+    radius: float = 0.5,
+    hole_radius: float = 0.05,
+    n_sides: int = 5,
+    fourier_terms: int = 20,
+    symm_rotate: bool = True,
+    poly_min_sides: int = 3,
+    poly_max_sides: int = 10,
+    max_size: float = 0.4,
+    min_size: float | None = 0.2,
+    color: bool = False,
+    rigid_type: str = 'polygon'
+):
+    """
+    SVRT #13 – Devuelve...
+    """
+    sample_pos = False
+    sample_neg = False
+    return sample_neg, sample_pos
+
+
+# ---------- Tarea SVRT 13 ----------
+
+def task_svrt_13(
+    shape_mode: str = 'normal',
+    radius: float = 0.5,
+    hole_radius: float = 0.05,
+    n_sides: int = 5,
+    fourier_terms: int = 20,
+    symm_rotate: bool = True,
+    poly_min_sides: int = 3,
+    poly_max_sides: int = 10,
+    max_size: float = 0.4,
+    min_size: float | None = 0.2,
+    color: bool = False,
+    rigid_type: str = 'polygon'
+):
+    """
+    SVRT #13 – Devuelve...
+    """
+    sample_pos = False
+    sample_neg = False
+    return sample_neg, sample_pos
+
+
+# ---------- Tarea SVRT 14 ----------
+
+def task_svrt_14(
+    shape_mode: str = 'normal',
+    radius: float = 0.5,
+    hole_radius: float = 0.05,
+    n_sides: int = 5,
+    fourier_terms: int = 20,
+    symm_rotate: bool = True,
+    poly_min_sides: int = 3,
+    poly_max_sides: int = 10,
+    max_size: float = 0.4,
+    min_size: float | None = 0.2,
+    color: bool = False,
+    rigid_type: str = 'polygon'
+):
+    """
+    SVRT #14 – Devuelve...
+    """
+    sample_pos = False
+    sample_neg = False
+    return sample_neg, sample_pos
+
+
+# ---------- Tarea SVRT 15 ----------
+
+def task_svrt_15(
+    shape_mode: str = 'normal',
+    radius: float = 0.5,
+    hole_radius: float = 0.05,
+    n_sides: int = 5,
+    fourier_terms: int = 20,
+    symm_rotate: bool = True,
+    poly_min_sides: int = 3,
+    poly_max_sides: int = 10,
+    max_size: float = 0.4,
+    min_size: float | None = 0.2,
+    color: bool = False,
+    rigid_type: str = 'polygon'
+):
+    """
+    SVRT #15 – Devuelve...
+    """
+    sample_pos = False
+    sample_neg = False
+    return sample_neg, sample_pos
+
+
+# ---------- Tarea SVRT 16 ----------
+
+def task_svrt_16(
+    shape_mode: str = 'normal',
+    radius: float = 0.5,
+    hole_radius: float = 0.05,
+    n_sides: int = 5,
+    fourier_terms: int = 20,
+    symm_rotate: bool = True,
+    poly_min_sides: int = 3,
+    poly_max_sides: int = 10,
+    max_size: float = 0.4,
+    min_size: float | None = 0.2,
+    color: bool = False,
+    rigid_type: str = 'polygon'
+):
+    """
+    SVRT #16 – Devuelve...
+    """
+    sample_pos = False
+    sample_neg = False
+    return sample_neg, sample_pos
+
+
+# ---------- Tarea SVRT 17 ----------
+
+def task_svrt_17(
+    shape_mode: str = 'normal',
+    radius: float = 0.5,
+    hole_radius: float = 0.05,
+    n_sides: int = 5,
+    fourier_terms: int = 20,
+    symm_rotate: bool = True,
+    poly_min_sides: int = 3,
+    poly_max_sides: int = 10,
+    max_size: float = 0.4,
+    min_size: float | None = 0.2,
+    color: bool = False,
+    rigid_type: str = 'polygon'
+):
+    """
+    SVRT #17 – Devuelve...
+    """
+    sample_pos = False
+    sample_neg = False
+    return sample_neg, sample_pos
+
+
+# ---------- Tarea SVRT 18 ----------
+
+def task_svrt_18(
+    shape_mode: str = 'normal',
+    radius: float = 0.5,
+    hole_radius: float = 0.05,
+    n_sides: int = 5,
+    fourier_terms: int = 20,
+    symm_rotate: bool = True,
+    poly_min_sides: int = 3,
+    poly_max_sides: int = 10,
+    max_size: float = 0.4,
+    min_size: float | None = 0.2,
+    color: bool = False,
+    rigid_type: str = 'polygon'
+):
+    """
+    SVRT #18 – Devuelve...
+    """
+    sample_pos = False
+    sample_neg = False
+    return sample_neg, sample_pos
+
+
+# ---------- Tarea SVRT 19 ----------
+
+def task_svrt_19(
+    shape_mode: str = 'normal',
+    radius: float = 0.5,
+    hole_radius: float = 0.05,
+    n_sides: int = 5,
+    fourier_terms: int = 20,
+    symm_rotate: bool = True,
+    poly_min_sides: int = 3,
+    poly_max_sides: int = 10,
+    max_size: float = 0.4,
+    min_size: float | None = 0.2,
+    color: bool = False,
+    rigid_type: str = 'polygon'
+):
+    """
+    SVRT #19 – Devuelve...
+    """
+    sample_pos = False
+    sample_neg = False
+    return sample_neg, sample_pos
+
+
+# ---------- Tarea SVRT 20 ----------
+
+def task_svrt_20(
+    shape_mode: str = 'normal',
+    radius: float = 0.5,
+    hole_radius: float = 0.05,
+    n_sides: int = 5,
+    fourier_terms: int = 20,
+    symm_rotate: bool = True,
+    poly_min_sides: int = 3,
+    poly_max_sides: int = 10,
+    max_size: float = 0.4,
+    min_size: float | None = 0.2,
+    color: bool = False,
+    rigid_type: str = 'polygon'
+):
+    """
+    SVRT #20 – Devuelve...
+    """
+    sample_pos = False
+    sample_neg = False
+    return sample_neg, sample_pos
+
+
+# ---------- Tarea SVRT 21 ----------
+
+def task_svrt_21(
+    shape_mode: str = 'normal',
+    radius: float = 0.5,
+    hole_radius: float = 0.05,
+    n_sides: int = 5,
+    fourier_terms: int = 20,
+    symm_rotate: bool = True,
+    poly_min_sides: int = 3,
+    poly_max_sides: int = 10,
+    max_size: float = 0.4,
+    min_size: float | None = 0.2,
+    color: bool = False,
+    rigid_type: str = 'polygon'
+):
+    """
+    SVRT #21 – Devuelve...
+    """
+    sample_pos = False
+    sample_neg = False
+    return sample_neg, sample_pos
+
+
+# ---------- Tarea SVRT 22 ----------
+
+def task_svrt_22(
+    shape_mode: str = 'normal',
+    radius: float = 0.5,
+    hole_radius: float = 0.05,
+    n_sides: int = 5,
+    fourier_terms: int = 20,
+    symm_rotate: bool = True,
+    poly_min_sides: int = 3,
+    poly_max_sides: int = 10,
+    max_size: float = 0.4,
+    min_size: float | None = 0.2,
+    color: bool = False,
+    rigid_type: str = 'polygon'
+):
+    """
+    SVRT #22 – Devuelve...
+    """
+    sample_pos = False
+    sample_neg = False
+    return sample_neg, sample_pos
+
+
+# ---------- Tarea SVRT 23 ----------
+
+def task_svrt_23(
+    shape_mode: str = 'normal',
+    radius: float = 0.5,
+    hole_radius: float = 0.05,
+    n_sides: int = 5,
+    fourier_terms: int = 20,
+    symm_rotate: bool = True,
+    poly_min_sides: int = 3,
+    poly_max_sides: int = 10,
+    max_size: float = 0.4,
+    min_size: float | None = 0.2,
+    color: bool = False,
+    rigid_type: str = 'polygon'
+):
+    """
+    SVRT #23 – Devuelve...
+    """
+    sample_pos = False
+    sample_neg = False
+    return sample_neg, sample_pos
+
+
+# ---------- Registro de tareas ----------
+# Tareas SVRT
 TASKS_SVRT = [
-    ["task_svrt_1", task_svrt_1, "The images contain objects of the same shape."],
-    ["task_svrt_2", task_svrt_2, "One object is inside the other."],
-    ["task_svrt_3", task_svrt_3, "The images contain objects in contact."],
-    ["task_svrt_5", task_svrt_5, "The images contain 2 pairs of identical objects."],
-    ["task_svrt_7", task_svrt_7, "The images contain 3 pairs of identical objects."],
+    ["task_svrt_1", task_svrt_1],
+    ["task_svrt_2", task_svrt_2],
+    ["task_svrt_3", task_svrt_3],
+    ["task_svrt_4", task_svrt_4],
+    ["task_svrt_5", task_svrt_5],
+    ["task_svrt_6", task_svrt_6],
+    ["task_svrt_7", task_svrt_7],
+    ["task_svrt_8", task_svrt_8],
+    ["task_svrt_9", task_svrt_9],
+    ["task_svrt_10", task_svrt_10],
+    ["task_svrt_11", task_svrt_11],
+    ["task_svrt_12", task_svrt_12],
+    ["task_svrt_13", task_svrt_13],
+    ["task_svrt_14", task_svrt_14],
+    ["task_svrt_15", task_svrt_15],
+    ["task_svrt_16", task_svrt_16],
+    ["task_svrt_17", task_svrt_17],
+    ["task_svrt_18", task_svrt_18],
+    ["task_svrt_19", task_svrt_19],
+    ["task_svrt_20", task_svrt_20],
+    ["task_svrt_21", task_svrt_21],
+    ["task_svrt_22", task_svrt_22],
+    ["task_svrt_23", task_svrt_23],
 ]

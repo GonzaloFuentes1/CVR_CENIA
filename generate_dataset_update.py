@@ -15,35 +15,57 @@ TASKS_IDX = {
     3: "task_svrt_3",
     4: "task_svrt_4",
     5: "task_svrt_5",
+    6: "task_svrt_6",
     7: "task_svrt_7",
+    8: "task_svrt_8",
+    9: "task_svrt_9",
+    10: "task_svrt_10",
+    11: "task_svrt_11",
+    12: "task_svrt_12",
+    13: "task_svrt_13",
+    14: "task_svrt_14",
+    15: "task_svrt_15",
+    16: "task_svrt_16",
+    17: "task_svrt_17",
+    18: "task_svrt_18",
+    19: "task_svrt_19",
+    20: "task_svrt_20",
+    21: "task_svrt_21",
+    22: "task_svrt_22",
+    23: "task_svrt_23",
     # puedes ir agregando más como:
     # 2: "task_svrt_2",
     # 3: "task_symmetry_rule",
 }
 
+
 def generate_dataset(task_name, task_fn, data_path, image_size, seed,
                      train_size, val_size, test_size):
-    task_path = os.path.join(data_path, task_name)
-    print(f"Generando dataset para {task_name} en {task_path}")
-    os.makedirs(os.path.join(task_path, 'train'), exist_ok=True)
-    os.makedirs(os.path.join(task_path, 'val'), exist_ok=True)
-    os.makedirs(os.path.join(task_path, 'test'), exist_ok=True)
+    sample_pos, sample_neg = task_fn()
+    if type(sample_pos) == bool:
+        print('Tarea ', task_name, ' no terminada')
+        return
+    else:
+        task_path = os.path.join(data_path, task_name)
+        print(f"Generando dataset para {task_name} en {task_path}")
+        os.makedirs(os.path.join(task_path, 'train'), exist_ok=True)
+        os.makedirs(os.path.join(task_path, 'val'), exist_ok=True)
+        os.makedirs(os.path.join(task_path, 'test'), exist_ok=True)
 
-    splits = {
-        'train': (seed, train_size),
-        'val': (seed + 1, val_size),
-        'test': (seed + 2, test_size),
-    }
-
-    for split, (split_seed, n_samples) in splits.items():
-        np.random.seed(split_seed)
-        for i in range(n_samples):
-            sample_pos, sample_neg = task_fn()
-            for label, (xy, size, shape, color) in enumerate([sample_pos, sample_neg]):
-                image = render_scene_safe(xy, size, shape, color, image_size=image_size)
-                img = Image.fromarray(image).convert('RGB')
-                save_path = os.path.join(task_path, split, f'class_{label}_{i:05d}.png')
-                img.save(save_path)
+        splits = {
+            'train': (seed, train_size),
+            'val': (seed + 1, val_size),
+            'test': (seed + 2, test_size),
+        }
+        for split, (split_seed, n_samples) in splits.items():
+            np.random.seed(split_seed)
+            for i in range(n_samples):
+                sample_pos, sample_neg = task_fn()
+                for label, (xy, size, shape, color) in enumerate([sample_pos, sample_neg]):
+                    image = render_scene_safe(xy, size, shape, color, image_size=image_size)
+                    img = Image.fromarray(image).convert('RGB')
+                    save_path = os.path.join(task_path, split, f'class_{label}_{i:05d}.png')
+                    img.save(save_path)
 
 
 if __name__ == '__main__':
@@ -77,17 +99,17 @@ if __name__ == '__main__':
     if task_idx == 0:
         # Generar dataset para todas las tareas
         for i in range(1, len(TASKS_IDX) + 1):
-            
+
             try:
                 task_name = TASKS_IDX[i]
             except KeyError:
                 raise ValueError(f"Tarea con índice {i} no registrada en TASKS_IDX.")
-            
+
             try:
-                task_fn_base = next(fn for name, fn, _ in TASKS_SVRT if name == task_name)
+                task_fn_base = next(fn for name, fn in TASKS_SVRT if name == task_name)
             except StopIteration:
                 raise ValueError(f"No se encontró la función para {task_name} en TASKS_SVRT.")
-            
+
             # Generar función con hiperparámetros inyectados
             def task_fn():
                 return task_fn_base(
@@ -112,7 +134,7 @@ if __name__ == '__main__':
             raise ValueError(f"Tarea con índice {args.task_idx} no registrada en TASKS_IDX.")
 
         try:
-            task_fn_base = next(fn for name, fn, _ in TASKS_SVRT if name == task_name)
+            task_fn_base = next(fn for name, fn in TASKS_SVRT if name == task_name)
         except StopIteration:
             raise ValueError(f"No se encontró la función para {task_name} en TASKS_SVRT.")
 
@@ -130,6 +152,5 @@ if __name__ == '__main__':
                 rigid_type=args.rigid_type
             )
 
-
         generate_dataset(task_name, task_fn, args.data_dir, args.image_size,
-                            args.seed, args.train_size, args.val_size, args.test_size)
+                         args.seed, args.train_size, args.val_size, args.test_size)
