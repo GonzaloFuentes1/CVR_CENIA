@@ -41,7 +41,7 @@ TASKS_IDX = {
 
 def generate_dataset(task_name, task_fn, data_path, image_size, seed,
                      train_size, val_size, test_size):
-    sample_pos, sample_neg = task_fn()
+    sample_neg, sample_pos = task_fn()
     if type(sample_pos) == bool:
         print('Tarea ', task_name, ' no terminada')
         return
@@ -60,8 +60,8 @@ def generate_dataset(task_name, task_fn, data_path, image_size, seed,
         for split, (split_seed, n_samples) in splits.items():
             np.random.seed(split_seed)
             for i in range(n_samples):
-                sample_pos, sample_neg = task_fn()
-                for label, (xy, size, shape, color) in enumerate([sample_pos, sample_neg]):
+                sample_neg, sample_pos = task_fn()
+                for label, (xy, size, shape, color) in enumerate([sample_neg, sample_pos]):
                     image = render_scene_safe(xy, size, shape, color, image_size=image_size)
                     img = Image.fromarray(image).convert('RGB')
                     save_path = os.path.join(task_path, split, f'class_{label}_{i:05d}.png')
