@@ -26,58 +26,17 @@ class Shape(object):
 
         self.sym_flip = sym_flip
         self.sym_rot = sym_rot
-        
+
         if randomize:
             self.randomize()
-        
-
-    def generate_part_part(self, radius, hole_radius, x1, y1, x2, y2): 
-    
-        if abs(x1 - x2) > self.gap_max or abs(y1 - y2) > self.gap_max:
-
-            d = np.sqrt((x1 - x2)**2 + (y1 - y2)**2)/5
-            
-            dx = (2 * np.random.rand() - 1) * d
-            dy = (2 * np.random.rand() - 1) * d
-            while dx**2 + dy**2 > d**2:
-                dx = (2 * np.random.rand() - 1) * d
-                dy = (2 * np.random.rand() - 1) * d
-            x3 = (x1 + x2) / 2 + dx
-            y3 = (y1 + y2) / 2 + dy
-
-            while x3**2 + y3**2 > radius**2:
-                dx = (2 * np.random.rand() - 1) * d
-                dy = (2 * np.random.rand() - 1) * d
-                while dx**2 + dy**2 > d**2:
-                    dx = (2 * np.random.rand() - 1) * d
-                    dy = (2 * np.random.rand() - 1) * d
-                x3 = (x1 + x2) / 2 + dx
-                y3 = (y1 + y2) / 2 + dy
-                
-
-            if self.generate_part_part(radius, hole_radius, x1, y1, x3, y3):
-                return True
-
-            if self.generate_part_part(radius, hole_radius, x3, y3, x2, y2):
-                return True
-            
-        else:
-
-            if x1**2 + y1**2 >= radius**2 or x1**2 + y1**2 < hole_radius**2:
-                return True
-            
-            self.x_pixels.append(x1)
-            self.y_pixels.append(y1)
-
-        return False
 
     def generate_part(self, radius, hole_radius):
 
         err1, err2, err3, err4 = True, True, True, True
-        
+
         while err1 or err2 or err3 or err4:
             nb_pixels = 0
-            
+
             self.x_pixels = []
             self.y_pixels = []
 
@@ -112,14 +71,53 @@ class Shape(object):
             self.n_pixels3 = len(self.x_pixels)
             err3 = self.generate_part_part(radius, hole_radius, x3, y3, x4, y4)
             self.n_pixels4 = len(self.x_pixels)
-            err4 = self.generate_part_part(radius, hole_radius, x4, y4, x1, y1)
+            err4 = self.generate_part_part(radius, hole_radius, x4, y4, x1, y1)  
+
+    def generate_part_part(self, radius, hole_radius, x1, y1, x2, y2): 
+
+        if abs(x1 - x2) > self.gap_max or abs(y1 - y2) > self.gap_max:
+
+            d = np.sqrt((x1 - x2)**2 + (y1 - y2)**2)/5
+
+            dx = (2 * np.random.rand() - 1) * d
+            dy = (2 * np.random.rand() - 1) * d
+            while dx**2 + dy**2 > d**2:
+                dx = (2 * np.random.rand() - 1) * d
+                dy = (2 * np.random.rand() - 1) * d
+            x3 = (x1 + x2) / 2 + dx
+            y3 = (y1 + y2) / 2 + dy
+
+            while x3**2 + y3**2 > radius**2:
+                dx = (2 * np.random.rand() - 1) * d
+                dy = (2 * np.random.rand() - 1) * d
+                while dx**2 + dy**2 > d**2:
+                    dx = (2 * np.random.rand() - 1) * d
+                    dy = (2 * np.random.rand() - 1) * d
+                x3 = (x1 + x2) / 2 + dx
+                y3 = (y1 + y2) / 2 + dy
+
+            if self.generate_part_part(radius, hole_radius, x1, y1, x3, y3):
+                return True
+
+            if self.generate_part_part(radius, hole_radius, x3, y3, x2, y2):
+                return True
+
+        else:
+
+            if x1**2 + y1**2 >= radius**2 or x1**2 + y1**2 < hole_radius**2:
+                return True
+
+            self.x_pixels.append(x1)
+            self.y_pixels.append(y1)
+
+        return False
 
     def randomize(self):
         self.x_pixels = []
         self.y_pixels = []
 
         # self.nb_pixels = 0
-        
+
         self.generate_part(self.radius, self.hole_radius)
 
         self.nb_pixels = len(self.x_pixels)
@@ -135,7 +133,7 @@ class Shape(object):
         #     self.rot_symmetrize(self.sym_rot)
         # if self.sym_flip:
         #     self.flip_symmetrize()
-        
+
         self.x_pixels = self.x_pixels - (self.x_pixels.max() + self.x_pixels.min())/2
         self.y_pixels = self.y_pixels - (self.y_pixels.max() + self.y_pixels.min())/2
 
@@ -145,12 +143,12 @@ class Shape(object):
 
         w = self.x_pixels.max() - self.x_pixels.min() # = w
         h = self.y_pixels.max() - self.y_pixels.min() # = h
-        
+
         self.wh = (1, 1)
 
         self.transformations = []
 
-    def smooth(self, n_sampled_points = 100, fourier_terms = 20):
+    def smooth(self, n_sampled_points=100, fourier_terms=20):
 
         # Recuperar figura base
         base_contour = self.get_contour()
@@ -198,7 +196,7 @@ class Shape(object):
             result += coeffs[2*k-1] * np.cos(2 * np.pi * k * t) + coeffs[2*k] * np.sin(2 * np.pi * k * t)
         return result
 
-    def rigid_transform(self, type = 'polygon', points = 3, rotate = 0):
+    def rigid_transform(self, type='polygon', points=3, rotate=0):
 
         # Alterar figura según tipo de figura rígida deseada
         if type == 'polygon':
@@ -263,9 +261,9 @@ class Shape(object):
         self.wh = (w, h)
         self.transformations = []
 
-    def symmetrize(self, rotate = 0):
+    def symmetrize(self, rotate=0):
 
-        if self.x_pixels[0] < 0:   
+        if self.x_pixels[0] < 0:
             # Tomamos un lado de la figura
             mask = self.x_pixels >= 0
 
@@ -333,18 +331,18 @@ class Shape(object):
     def rotate(self, alpha):
         ux, uy = np.cos(alpha), -np.sin(alpha)
         vx, vy = np.sin(alpha), np.cos(alpha)
-        
+
         x = self.x_pixels * ux + self.y_pixels * uy
         y = self.x_pixels * vx + self.y_pixels * vy
 
         self.x_pixels = x
         self.y_pixels = y
-        
+
         self.transformations.append(('r', alpha))
-        
-        w = self.x_pixels.max() - self.x_pixels.min() # = w
-        h = self.y_pixels.max() - self.y_pixels.min() # = h
-        
+
+        w = self.x_pixels.max() - self.x_pixels.min()  # = w
+        h = self.y_pixels.max() - self.y_pixels.min()  # = h
+
         temp_size = np.sqrt(w * h)
         self.bb = (w, h)
         self.wh = (w/temp_size, h/temp_size)
@@ -352,21 +350,21 @@ class Shape(object):
     def get_bb(self):
         w = self.x_pixels.max() - self.x_pixels.min()
         h = self.y_pixels.max() - self.y_pixels.min()
-        return (w,h)
+        return (w, h)
 
-    def scale(self, s): 
+    def scale(self, s):
         if isinstance(s, tuple):
             self.x_pixels = self.x_pixels*s[0]
             self.y_pixels = self.y_pixels*s[1]
         else:
             self.x_pixels = self.x_pixels*s
             self.y_pixels = self.y_pixels*s
-        
+
         self.transformations.append(('s', s))
 
-        w = self.x_pixels.max() - self.x_pixels.min() # = w
-        h = self.y_pixels.max() - self.y_pixels.min() # = h
-        
+        w = self.x_pixels.max() - self.x_pixels.min()  # = w
+        h = self.y_pixels.max() - self.y_pixels.min()  # = h
+
         temp_size = np.sqrt(w * h)
         # temp_size = w * h
         self.bb = (w, h)
@@ -375,8 +373,8 @@ class Shape(object):
     def set_wh(self, wh):
         current_w = self.x_pixels.max() - self.x_pixels.min()
         current_h = self.y_pixels.max() - self.y_pixels.min()
-        
-        scale = (wh[0]/current_w, wh[1]/current_h) 
+
+        scale = (wh[0]/current_w, wh[1]/current_h)
         self.scale(scale)
 
     def set_size(self, s):
@@ -392,7 +390,7 @@ class Shape(object):
 
         # Copiar atributos opcionales si existen
         for attr in ['n_pixels1', 'n_pixels2', 'n_pixels3', 'n_pixels4',
-                    'bb', 'circle_center', 'max_radius']:
+                     'bb', 'circle_center', 'max_radius']:
             if hasattr(self, attr):
                 setattr(s, attr, copy.deepcopy(getattr(self, attr)))
 
@@ -401,12 +399,11 @@ class Shape(object):
 
         return s
 
-    
     def flip(self):
         self.x_pixels = - self.x_pixels
 
         self.transformations.append(('f', None))
-    
+
     def subsample(self):
         # sample many intermediate points
         N = max(500//len(self.x_pixels), 1)
@@ -422,9 +419,9 @@ class Shape(object):
 
         self.x_pixels = xy[:,0]
         self.y_pixels = xy[:,1]
-    
+
     def reset(self):
-        
+
         for t, v in reversed(self.transformations):
             if t == 'r':
                 self.rotate(-v)
@@ -436,26 +433,26 @@ class Shape(object):
                 self.scale(v)
             if t == 'f':
                 self.flip()
-        
+
         self.x_pixels = self.x_pixels - (self.x_pixels.max() + self.x_pixels.min())/2
         self.y_pixels = self.y_pixels - (self.y_pixels.max() + self.y_pixels.min())/2
 
         self.transformations = []
-        
+   
         w = self.x_pixels.max() - self.x_pixels.min() # = w
         h = self.y_pixels.max() - self.y_pixels.min() # = h
-        
+ 
         temp_size = np.sqrt(w * h)
 
         self.bb = (w, h)
         self.wh = (w/temp_size, h/temp_size)
 
     def get_hole_radius(self):
-        
+
         img = (np.zeros((100,100)) * 255).astype(np.uint8)
-        x_pixels = np.concatenate([self.x_pixels, self.x_pixels[0:1]]) 
-        y_pixels = np.concatenate([self.y_pixels, self.y_pixels[0:1]]) 
-        
+        x_pixels = np.concatenate([self.x_pixels, self.x_pixels[0:1]])
+        y_pixels = np.concatenate([self.y_pixels, self.y_pixels[0:1]])
+
         contours = np.stack([x_pixels,y_pixels], 1) * 70 + 50
         contours = contours.astype(np.int32)
         contours[:10,:10]
@@ -501,15 +498,14 @@ class ShapeCurl(Shape):
         self.x_pixels = self.x_pixels - (self.x_pixels.max() + self.x_pixels.min())/2
         self.y_pixels = self.y_pixels - (self.y_pixels.max() + self.y_pixels.min())/2
 
-        ### resets to a squre
+        ### resets to a square
         self.x_pixels = self.x_pixels/(self.x_pixels.max() - self.x_pixels.min())
         self.y_pixels = self.y_pixels/(self.y_pixels.max() - self.y_pixels.min())
 
-        w = self.x_pixels.max() - self.x_pixels.min() # = w
-        h = self.y_pixels.max() - self.y_pixels.min() # = h
-        
-        self.wh = (1, 1)
+        w = self.x_pixels.max() - self.x_pixels.min()  # = w
+        h = self.y_pixels.max() - self.y_pixels.min()  # = h
 
+        self.wh = (1, 1)
 
         self.transformations = []
 
