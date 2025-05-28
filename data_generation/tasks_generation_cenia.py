@@ -132,7 +132,7 @@ def task_svrt_2(
     """
     sample_pos = False
     sample_neg = False
-    return sample_pos, sample_neg
+    return sample_neg, sample_pos
 
 
 # ---------- Tarea SVRT 3 ----------
@@ -455,7 +455,7 @@ def task_svrt_10(
 
 
 # ---------- Tarea SVRT 11 ----------
-
+# Falta hacer que los objetos no se toquen en caso negativo.
 def task_svrt_11(
     shape_mode: str = 'normal',
     radius: float = 0.5,
@@ -463,18 +463,51 @@ def task_svrt_11(
     n_sides: int = 5,
     fourier_terms: int = 20,
     symm_rotate: bool = True,
-    poly_min_sides: int = 3,
-    poly_max_sides: int = 10,
-    max_size: float = 0.4,
+    max_size: float = 0.3,
     min_size: float | None = 0.2,
+    shrink_factor: float = 0.5,
+    min_group_dist: float = 0.4,
     color: bool = False,
     rigid_type: str = 'polygon'
 ):
     """
-    SVRT #11 – Devuelve...
+    SVRT #11 – Devuelve (sample_neg, sample_pos).
+    2 objetos distinto tamaño, clase 1 en contacto.
+
     """
-    sample_pos = False
-    sample_neg = False
+
+    def normalize_scene(xy, size, margin=0.05):
+        # xy: (n, 1, 2), size: (n, 1)
+        bb_min = (xy - size[..., None] / 2).min(axis=(0, 1))
+        bb_max = (xy + size[..., None] / 2).max(axis=(0, 1))
+        scale = (1 - 2 * margin) / (bb_max - bb_min).max()
+        offset = 0.5 - ((bb_min + bb_max) / 2) * scale
+        return xy * scale + offset, size * scale
+
+    # --------- Tamaños ---------
+    size_vals = np.random.rand(2) * (max_size - min_size) + min_size
+    size_vals *= shrink_factor
+    size = size_vals[:, None]
+
+    # --------- Positivo ---------
+    shapes = [create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate) for _ in range(2)]
+
+    xy_contact, _ = sample_contact_many(shapes, size_vals)
+
+    xy_pos, size = normalize_scene(xy_contact, size)
+    shapes_pos = [[s] for s in shapes]
+    if color:
+        colors_pos = [c.flatten() for c in sample_random_colors(2)]
+    else:
+        colors_pos = [np.array([0, 0, 0], dtype=np.float32).reshape(1, 3) for _ in range(2)]
+    sample_pos = (xy_pos, size, shapes_pos, colors_pos)
+
+    # --------- Negativo ---------
+    shape1 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    shape2 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+
+    sample_neg = decorate_shapes([shape1, shape2], max_size=max_size, min_size=min_size, color=color)
+
     return sample_neg, sample_pos
 
 
