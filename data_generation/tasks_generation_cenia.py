@@ -5,6 +5,7 @@ from data_generation.utils import (
     sample_contact_many,
     sample_position_inside_1,
     sample_positions_bb,
+    sample_positions_align,
     sample_random_colors,
 )
 
@@ -43,7 +44,7 @@ def create_shape(
 
 # ---------- Decorador de figuras ----------
 
-def decorate_shapes(shapes, max_size=0.4, min_size=None, size=False, rotate=False, color=False, flip=False):
+def decorate_shapes(shapes, max_size=0.4, min_size=None, size=False, rotate=False, color=False, flip=False, align=False):
     """
     Adorna N figuras con tamaño, posición (sin solapamiento), rotación, flip y color.
     Devuelve: (xy, size, shape_wrapped, colors)
@@ -59,7 +60,12 @@ def decorate_shapes(shapes, max_size=0.4, min_size=None, size=False, rotate=Fals
 
     # Posiciones sin superposición usando bounding boxes
     size_batch = size[None, ...]  # shape (1, n, 1)
-    xy_vals = sample_positions_bb(size_batch)[0]  # shape (n, 2)
+    if align:
+        xy_vals = sample_positions_align(size_batch)[0]  # shape (n, 2)
+
+    else:
+        xy_vals = sample_positions_bb(size_batch)[0]  # shape (n, 2)
+
     xy = xy_vals[:, None, :]  # shape (n, 1, 2)
 
     for s in shapes:
@@ -490,12 +496,13 @@ def task_svrt_11(
     size = size_vals[:, None]
 
     # --------- Positivo ---------
-    shapes = [create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate) for _ in range(2)]
+    shape11 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    shape12 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
 
-    xy_contact, _ = sample_contact_many(shapes, size_vals)
+    xy_contact, _ = sample_contact_many([shape11, shape12], size_vals)
 
     xy_pos, size = normalize_scene(xy_contact, size)
-    shapes_pos = [[s] for s in shapes]
+    shapes_pos = [shape11, shape12]
     if color:
         colors_pos = [c.flatten() for c in sample_random_colors(2)]
     else:
@@ -503,10 +510,10 @@ def task_svrt_11(
     sample_pos = (xy_pos, size, shapes_pos, colors_pos)
 
     # --------- Negativo ---------
-    shape1 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
-    shape2 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    shape21 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    shape22 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
 
-    sample_neg = decorate_shapes([shape1, shape2], max_size=max_size, min_size=min_size, color=color)
+    sample_neg = decorate_shapes([shape21, shape22], max_size=max_size, min_size=min_size, color=color)
 
     return sample_neg, sample_pos
 
@@ -576,10 +583,28 @@ def task_svrt_14(
     rigid_type: str = 'polygon'
 ):
     """
-    SVRT #14 – Devuelve...
+    SVRT #14 – Devuelve sample_neg, sample_pos
     """
-    sample_pos = False
-    sample_neg = False
+    def normalize_scene(xy, size, margin=0.05):
+        # xy: (n, 1, 2), size: (n, 1)
+        bb_min = (xy - size[..., None] / 2).min(axis=(0, 1))
+        bb_max = (xy + size[..., None] / 2).max(axis=(0, 1))
+        scale = (1 - 2 * margin) / (bb_max - bb_min).max()
+        offset = 0.5 - ((bb_min + bb_max) / 2) * scale
+        return xy * scale + offset, size * scale
+
+    shape1 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+
+    # --------- Positivo ---------
+    xy_pos, size_pos, shapes_pos, color_pos = decorate_shapes(
+        [shape1.clone(), shape1.clone(), shape1.clone()],
+        max_size=max_size, min_size=min_size, color=color, align=True
+    )
+    xy_pos, size_pos = normalize_scene(xy_pos, size_pos)
+    sample_pos = (xy_pos, size_pos, shapes_pos, color_pos)
+    # --------- Negativo ---------
+    sample_neg = decorate_shapes([shape1.clone(), shape1.clone(), shape1.clone()], max_size=max_size, min_size=min_size, color=color)
+
     return sample_neg, sample_pos
 
 
