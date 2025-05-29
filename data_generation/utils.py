@@ -1,5 +1,5 @@
 import os
-
+import random
 import cv2
 import numpy as np
 from PIL import Image
@@ -226,6 +226,61 @@ def sample_positions_bb(size, n_sample_min=1, max_tries=10, n_samples_over=100):
         xy_ = np.concatenate([xy_, xy[valid][:n_sample_min-len(xy_)]], 0)
         
     return xy_
+
+def sample_positions_align(size, n_sample_min=1, max_tries=10, n_samples_over=100):
+    """
+    Aligns all objects along a random line within [0,1]x[0,1], with random distances between them.
+    size: (1, n, 1) or (n, 1) array of object sizes (widths).
+    Returns: (n_sample_min, n_objects, 2) array of (x, y) positions.
+    """
+    if size.ndim == 3:
+        size = size[0]  # Remove batch dimension if present
+    n_objects = size.shape[0]
+    widths = size.flatten()
+
+    # 1. Sample a random line: pick a random angle and a random point in [0,1]x[0,1]
+    theta = np.random.rand() * 2 * np.pi
+    direction = np.array([np.cos(theta), np.sin(theta)])
+    center = np.random.rand(2)
+
+    # 2. Sample random gaps between objects
+    min_gap = 0.05
+    gap1 = random.uniform(min_gap, widths.sum())
+    while widths.sum() - gap1 < min_gap:
+        gap1 = random.uniform(min_gap, widths.sum())
+    gap2 = random.uniform(min_gap, widths.sum() - gap1)
+    gaps = np.array([gap1, gap2])
+    total_gap = gaps.sum()
+
+    # 3. Compute total length needed for all objects (sum of widths + gaps)
+    total_length = widths.sum() + total_gap
+    if total_length > 1.0:
+        scale = 1.0 / total_length
+        widths *= scale
+        gaps *= scale
+        total_length = 1.0
+
+    # 4. Compute start point of the line segment
+    start = center - direction * (total_length / 2)
+    # Shift so that all objects fit within [0,1]x[0,1]
+    min_shift = np.maximum(-start, 0)
+    max_shift = np.minimum(1 - (start + direction * total_length), 0)
+    shift = min_shift + (max_shift - min_shift) * np.random.rand()
+    start = start + shift
+
+    # 5. Compute positions along the line for each object
+    positions = []
+    pos = start
+    for i, w in enumerate(widths):
+        positions.append(pos + direction * (w / 2))
+        if i < n_objects - 1:
+            pos = pos + direction * (w + gaps[i])
+    positions = np.stack(positions, axis=0)
+
+    # 6. Repeat for n_sample_min
+    xy = positions[None, ...]
+    xy = np.repeat(xy, n_sample_min, axis=0)
+    return xy
 
 
 def sample_random_colors(n_samples):
