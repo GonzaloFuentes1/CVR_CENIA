@@ -209,7 +209,7 @@ class Shape(object):
         elif type == 'irregular':
             # Generamos poliedro irregular a partir de figura base
             # Seleccionamos points puntos y los conectamos
-            idx = np.linspace(0, len(self.x_pixels)-1, points + 1, dtype=int)
+            idx = np.linspace(0, len(self.x_pixels) - 1, points, dtype=int, endpoint=False)
             self.x_pixels = self.x_pixels[idx]
             self.y_pixels = self.y_pixels[idx]
 
@@ -513,8 +513,9 @@ class ShapeCurl(Shape):
 # test
 if __name__ == "__main__":
     shape = Shape()
-    shape.rigid_transform(type='arrow_line', points=5, rotate=True)
+    shape.rigid_transform(type='irregular', points=5, rotate=True)
     contour = shape.get_contour()
+    print(contour)
     plt.plot(contour[:, 0], contour[:, 1])
     plt.axis('equal')
     plt.show()
