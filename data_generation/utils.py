@@ -1,5 +1,6 @@
 import os
 import random
+
 import cv2
 import numpy as np
 from PIL import Image
@@ -474,4 +475,3 @@ def save_image(images, base_path, task_name):
     #     images = (images*255).astype(np.uint8)
     img = Image.fromarray(images).convert('RGB')
     img.save(save_path)
-
