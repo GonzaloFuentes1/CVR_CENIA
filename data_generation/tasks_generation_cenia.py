@@ -417,12 +417,99 @@ def task_svrt_8(
     """
     SVRT #8 – Devuelve...
     """
+<<<<<<< Updated upstream
     sample_pos = False
     sample_neg = False
+=======
+
+    # Clase 1: Figura grande con figura idéntica escalada dentro
+    outer = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    inner = outer.clone()
+
+    size_outer = max_size * 0.9
+    size_inner = size_outer * 0.3
+
+    # posición global del centro del outer
+    xy_outer = np.random.rand(2) * (1 - size_outer) + size_outer / 2
+
+    max_attempts = 10
+
+    done_flag = False
+    for _ in range(max_attempts):
+        xy_inner_rel = sample_position_inside_1(outer, inner, scale=size_inner / size_outer)
+        if len(xy_inner_rel) > 0:
+            xy_inner = xy_inner_rel[0] * size_outer + xy_outer
+            done_flag = True
+            break
+        else:
+            outer = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+            inner = outer.clone()
+    if not done_flag:
+        xy_inner = xy_outer
+        print("Fallo al encontrar posición válida para inner dentro de outer.")
+
+    xy_pos = np.stack([xy_outer, xy_inner])[:, None, :]
+    size_pos = np.array([[size_outer], [size_inner]])
+    shapes_pos = [[outer], [inner]]
+
+    if color:
+        color_pos = sample_random_colors(2)
+        color_pos = [color_pos[i:i+1] for i in range(2)]
+    else:
+        color_pos = [np.array([0, 0, 0], dtype=np.float32).reshape(1, 3) for _ in range(2)]
+
+    sample_pos = (xy_pos, size_pos, shapes_pos, color_pos)
+
+    # Clase 0:
+    # Coinflip para determinar subclase
+
+    if np.random.rand() > 0.5:
+        # Subclase 0: Figura grande con figura pequeña dentro, pero diferentes
+        outer = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        inner = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+
+        size_outer = max_size * 0.9
+        size_inner = size_outer * 0.3
+
+        # posición global del centro del outer
+        xy_outer = np.random.rand(2) * (1 - size_outer) + size_outer / 2
+
+        max_attempts = 10
+        done_flag = False
+        for _ in range(max_attempts):
+            xy_inner_rel = sample_position_inside_1(outer, inner, scale=size_inner / size_outer)
+            if len(xy_inner_rel) > 0:
+                xy_inner = xy_inner_rel[0] * size_outer + xy_outer
+                done_flag = True
+                break
+            else:
+                outer = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+                inner = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        if not done_flag:
+            xy_inner = xy_outer
+            print("Fallo al encontrar posición válida para inner dentro de outer.")
+
+        xy_neg = np.stack([xy_outer, xy_inner])[:, None, :]
+        size_neg = np.array([[size_outer], [size_inner]])
+        shapes_neg = [[outer], [inner]]
+        if color:
+            color_neg = sample_random_colors(2)
+            color_neg = [color_neg[i:i+1] for i in range(2)]
+        else:
+            color_neg = [np.array([0, 0, 0], dtype=np.float32).reshape(1, 3) for _ in range(2)]
+        sample_neg = (xy_neg, size_neg, shapes_neg, color_neg)
+    else:
+        # Subclase 1: Figuras idénticas hasta traslación y escalamiento, sin contenerse
+        shape1 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shape2 = shape1.clone()
+
+        sample_neg = decorate_shapes([shape1, shape2], max_size=max_size, min_size=min_size, color=color, size = True)
+
+>>>>>>> Stashed changes
     return sample_neg, sample_pos
 
-
 # ---------- Tarea SVRT 9 ----------
+
 
 def task_svrt_9(
     shape_mode: str = 'normal',
@@ -893,8 +980,104 @@ def task_svrt_23(
     return sample_neg, sample_pos
 
 
+# ---------- Tarea MTS ----------
+
+def task_MTS(
+    shape_mode: str = 'normal',
+    radius: float = 0.5,
+    hole_radius: float = 0.05,
+    n_sides: int = 5,
+    fourier_terms: int = 20,
+    symm_rotate: bool = True,
+    poly_min_sides: int = 3,
+    poly_max_sides: int = 10,
+    max_size: float = 0.4,
+    min_size: float | None = 0.2,
+    color: bool = False,
+    rigid_type: str = 'polygon'
+):
+    """
+    MTS – Devuelve...
+    """
+    sample_pos = False
+    sample_neg = False
+    return sample_neg, sample_pos
+
+
+# ---------- Tarea SD ----------
+
+def task_SD(
+    shape_mode: str = 'normal',
+    radius: float = 0.5,
+    hole_radius: float = 0.05,
+    n_sides: int = 5,
+    fourier_terms: int = 20,
+    symm_rotate: bool = True,
+    poly_min_sides: int = 3,
+    poly_max_sides: int = 10,
+    max_size: float = 0.4,
+    min_size: float | None = 0.2,
+    color: bool = False,
+    rigid_type: str = 'polygon'
+):
+    """
+    SD – Devuelve...
+    """
+    sample_pos = False
+    sample_neg = False
+    return sample_neg, sample_pos
+
+
+# ---------- Tarea SOSD ----------
+
+def task_SOSD(
+    shape_mode: str = 'normal',
+    radius: float = 0.5,
+    hole_radius: float = 0.05,
+    n_sides: int = 5,
+    fourier_terms: int = 20,
+    symm_rotate: bool = True,
+    poly_min_sides: int = 3,
+    poly_max_sides: int = 10,
+    max_size: float = 0.4,
+    min_size: float | None = 0.2,
+    color: bool = False,
+    rigid_type: str = 'polygon'
+):
+    """
+    SOSD – Devuelve...
+    """
+    sample_pos = False
+    sample_neg = False
+    return sample_neg, sample_pos
+
+
+# ---------- Tarea RMTS ----------
+
+def task_RMTS(
+    shape_mode: str = 'normal',
+    radius: float = 0.5,
+    hole_radius: float = 0.05,
+    n_sides: int = 5,
+    fourier_terms: int = 20,
+    symm_rotate: bool = True,
+    poly_min_sides: int = 3,
+    poly_max_sides: int = 10,
+    max_size: float = 0.4,
+    min_size: float | None = 0.2,
+    color: bool = False,
+    rigid_type: str = 'polygon'
+):
+    """
+    RMTS – Devuelve...
+    """
+    sample_pos = False
+    sample_neg = False
+    return sample_neg, sample_pos
+
+
 # ---------- Registro de tareas ----------
-# Tareas SVRT
+# Tareas SVRT y tareas cenia
 TASKS_SVRT = [
     ["task_svrt_1", task_svrt_1],
     ["task_svrt_2", task_svrt_2],
@@ -919,4 +1102,8 @@ TASKS_SVRT = [
     ["task_svrt_21", task_svrt_21],
     ["task_svrt_22", task_svrt_22],
     ["task_svrt_23", task_svrt_23],
+    ["task_MTS", task_MTS],
+    ["task_SD", task_SD],
+    ["task_SOSD", task_SOSD],
+    ["task_RMTS", task_RMTS]
 ]
