@@ -69,9 +69,9 @@ def sample_position_inside_1(s1, s2, scale):
 def sample_position_inside_many(s1, shapes, scales):
     c1 = s1.get_contour()
     c2s = [s2.get_contour() for s2 in shapes]
-    
+
     bbs_2 = np.array([c2.max(0) - c2.min(0) for c2 in c2s]) * np.array(scales)[:,None]
-    
+
     n_shapes = len(shapes)
 
     # sampling points
@@ -82,27 +82,27 @@ def sample_position_inside_many(s1, shapes, scales):
     dists = np.abs(samples[:,:,None,:] - samples[:,None,:,:]) - (bbs_2[None,:,None,:] + bbs_2[None,None,:,:])/2 > 0
     triu_idx = np.triu_indices(n_shapes, k=1)[0]*n_shapes + np.triu_indices(n_shapes, k=1)[1]
     no_overlap = dists.any(3).reshape(500, n_shapes*n_shapes)[:, triu_idx].all(1)
-    
+
     samples = samples[no_overlap]
 
     n_samples_left = len(samples)
     bb_2_ = np.concatenate([bbs_2]*n_samples_left, 0)
-    
+
     samples = samples.reshape([n_samples_left*n_shapes, 2])
-    
+
     p1c = np.concatenate([c1[:-1], c1[1:]], 1)[None,:,:]
     samples = samples[:,None,:]
     res = np.logical_and(
         np.logical_or(
-            p1c[:,:,0:1] < samples[:,:,0:1], 
-            p1c[:,:,2:3] < samples[:,:,0:1]), 
+            p1c[:,:,0:1] < samples[:,:,0:1],
+            p1c[:,:,2:3] < samples[:,:,0:1]),
         np.logical_xor(
-            p1c[:,:,1:2] <= samples[:,:,1:2], 
+            p1c[:,:,1:2] <= samples[:,:,1:2],
             p1c[:,:,3:4] <= samples[:,:,1:2])
         )[:,:,0]
     res1 = (res.sum(1)%2==1)
     res2 = (np.abs(samples - c1[None,:,:]) > bb_2_[:,None,:]/2).any(2).all(1)
-    
+
     res = np.logical_and(res1, res2)
     res = res.reshape([-1, n_shapes]).all(1)
     samples = samples.reshape([-1, n_shapes, 2])
@@ -227,24 +227,20 @@ def sample_positions_bb(size, n_sample_min=1, max_tries=10, n_samples_over=100):
         
     return xy_
 
-def sample_positions_align(size, n_sample_min=1, max_tries=10, n_samples_over=100):
-    """
-    Aligns all objects along a random line within [0,1]x[0,1], with random distances between them.
-    size: (1, n, 1) or (n, 1) array of object sizes (widths).
-    Returns: (n_sample_min, n_objects, 2) array of (x, y) positions.
-    """
-    if size.ndim == 3:
-        size = size[0]  # Remove batch dimension if present
+# Suma de los tamaños debe ser menor que 1
+def sample_positions_align(size):
+    size = size[0]  
     n_objects = size.shape[0]
     widths = size.flatten()
-
-    # 1. Sample a random line: pick a random angle and a random point in [0,1]x[0,1]
+    # Random line
+    # Random angle
     theta = np.random.rand() * 2 * np.pi
     direction = np.array([np.cos(theta), np.sin(theta)])
-    center = np.random.rand(2)
+    # Center of [0,1]x[0,1] square
+    center = np.array([0.5,0.5])
 
-    # 2. Sample random gaps between objects
-    min_gap = 0.05
+    # Random gaps between objects
+    min_gap = 0.08
     gap1 = random.uniform(min_gap, widths.sum())
     while widths.sum() - gap1 < min_gap:
         gap1 = random.uniform(min_gap, widths.sum())
@@ -252,34 +248,19 @@ def sample_positions_align(size, n_sample_min=1, max_tries=10, n_samples_over=10
     gaps = np.array([gap1, gap2])
     total_gap = gaps.sum()
 
-    # 3. Compute total length needed for all objects (sum of widths + gaps)
     total_length = widths.sum() + total_gap
-    if total_length > 1.0:
-        scale = 1.0 / total_length
-        widths *= scale
-        gaps *= scale
-        total_length = 1.0
 
-    # 4. Compute start point of the line segment
-    start = center - direction * (total_length / 2)
-    # Shift so that all objects fit within [0,1]x[0,1]
-    min_shift = np.maximum(-start, 0)
-    max_shift = np.minimum(1 - (start + direction * total_length), 0)
-    shift = min_shift + (max_shift - min_shift) * np.random.rand()
-    start = start + shift
-
-    # 5. Compute positions along the line for each object
+    # Positions along the line
     positions = []
-    pos = start
+    pos = center
     for i, w in enumerate(widths):
         positions.append(pos + direction * (w / 2))
         if i < n_objects - 1:
             pos = pos + direction * (w + gaps[i])
     positions = np.stack(positions, axis=0)
 
-    # 6. Repeat for n_sample_min
     xy = positions[None, ...]
-    xy = np.repeat(xy, n_sample_min, axis=0)
+
     return xy
 
 

@@ -44,7 +44,7 @@ def create_shape(
 
 # ---------- Decorador de figuras ----------
 
-def decorate_shapes(shapes, max_size=0.4, min_size=None, size=False, rotate=False, color=False, flip=False, align=False):
+def decorate_shapes(shapes, max_size=0.4, min_size=None, size=False, rotate=False, color=False, flip=False, align=False, middle=0):
     """
     Adorna N figuras con tamaño, posición (sin solapamiento), rotación, flip y color.
     Devuelve: (xy, size, shape_wrapped, colors)
@@ -57,10 +57,20 @@ def decorate_shapes(shapes, max_size=0.4, min_size=None, size=False, rotate=Fals
         size = size_vals[:, None]  # shape (n, 1)
     else:
         size = np.full((n, 1), fill_value=max_size/2)
-
+    if middle == 1:
+        size[1] = max_size
+    if middle == 2:
+        k = np.random.rand()
+        if k >= 0.5:
+            size[0] = max_size
+        else:
+            size[2] = max_size
     # Posiciones sin superposición usando bounding boxes
     size_batch = size[None, ...]  # shape (1, n, 1)
     if align:
+        sizes = size_batch[0]
+        if sizes.sum() >= 1:
+            size_batch *= (1 / (sizes.sum()*0.8))  # Normalizar para que sumen 1
         xy_vals = sample_positions_align(size_batch)[0]  # shape (n, 2)
 
     else:
@@ -429,10 +439,36 @@ def task_svrt_9(
     rigid_type: str = 'polygon'
 ):
     """
-    SVRT #9 – Devuelve...
+    SVRT #9 3 figuras identicas alineadas con una mayor que las otras 2.
+            – Clase 1: La figura de mayor tamaño se encuentra entre las de menor tamaño
+            - Clase 0: La figura de mayor tamaño no se encuentra entra las de menor tamaño
     """
-    sample_pos = False
-    sample_neg = False
+    def normalize_scene(xy, size, margin=0.05):
+        # xy: (n, 1, 2), size: (n, 1)
+        bb_min = (xy - size[..., None] / 2).min(axis=(0, 1))
+        bb_max = (xy + size[..., None] / 2).max(axis=(0, 1))
+        scale = (1 - 2 * margin) / (bb_max - bb_min).max()
+        offset = 0.5 - ((bb_min + bb_max) / 2) * scale
+        return xy * scale + offset, size * scale
+
+    shape1 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    shape2 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+
+    # --------- Positivo ---------
+    xy_pos, size_pos, shapes_pos, color_pos = decorate_shapes(
+        [shape1.clone(), shape1.clone(), shape1.clone()],
+        max_size=max_size, min_size=min_size, color=color, align=True, middle=1
+    )
+    xy_pos, size_pos = normalize_scene(xy_pos, size_pos)
+    sample_pos = (xy_pos, size_pos, shapes_pos, color_pos)
+    # --------- Negativo ---------
+    xy_neg, size_neg, shapes_neg, color_neg = decorate_shapes(
+        [shape2.clone(), shape2.clone(), shape2.clone()],
+        max_size=max_size, min_size=min_size, color=color, align=True, middle=2
+    )
+    xy_neg, size_neg = normalize_scene(xy_neg, size_neg)
+    sample_neg = (xy_neg, size_neg, shapes_neg, color_neg)
+
     return sample_neg, sample_pos
 
 
@@ -461,7 +497,7 @@ def task_svrt_10(
 
 
 # ---------- Tarea SVRT 11 ----------
-# Falta hacer que los objetos no se toquen en caso negativo.
+# Ver tema de los sizes, como hacer para tener figuras de varios tamaños de manera mas pronunciada, estandarizarlo?
 def task_svrt_11(
     shape_mode: str = 'normal',
     radius: float = 0.5,
@@ -469,7 +505,7 @@ def task_svrt_11(
     n_sides: int = 5,
     fourier_terms: int = 20,
     symm_rotate: bool = True,
-    max_size: float = 0.3,
+    max_size: float = 0.4,
     min_size: float | None = 0.2,
     shrink_factor: float = 0.5,
     min_group_dist: float = 0.4,
@@ -513,7 +549,7 @@ def task_svrt_11(
     shape21 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
     shape22 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
 
-    sample_neg = decorate_shapes([shape21, shape22], max_size=max_size, min_size=min_size, color=color)
+    sample_neg = decorate_shapes([shape21, shape22], max_size=max_size, min_size=min_size, color=color, size=True)
 
     return sample_neg, sample_pos
 
@@ -594,6 +630,7 @@ def task_svrt_14(
         return xy * scale + offset, size * scale
 
     shape1 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    shape2 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
 
     # --------- Positivo ---------
     xy_pos, size_pos, shapes_pos, color_pos = decorate_shapes(
@@ -603,7 +640,12 @@ def task_svrt_14(
     xy_pos, size_pos = normalize_scene(xy_pos, size_pos)
     sample_pos = (xy_pos, size_pos, shapes_pos, color_pos)
     # --------- Negativo ---------
-    sample_neg = decorate_shapes([shape1.clone(), shape1.clone(), shape1.clone()], max_size=max_size, min_size=min_size, color=color)
+    xy_neg, size_neg, shapes_neg, color_neg = decorate_shapes(
+        [shape2.clone(), shape2.clone(), shape2.clone()],
+        max_size=max_size, min_size=min_size, color=color, align=False,
+    )
+    xy_neg, size_neg = normalize_scene(xy_neg, size_neg)
+    sample_neg = (xy_neg, size_neg, shapes_neg, color_neg)
 
     return sample_neg, sample_pos
 
@@ -793,10 +835,37 @@ def task_svrt_22(
     rigid_type: str = 'polygon'
 ):
     """
-    SVRT #22 – Devuelve...
+    SVRT #22 3 figuras alineadas
+            – Clase 1: Todas las figuras son iguales
+            - Clase 0: Las figuras no son iguales
     """
-    sample_pos = False
-    sample_neg = False
+    def normalize_scene(xy, size, margin=0.05):
+        # xy: (n, 1, 2), size: (n, 1)
+        bb_min = (xy - size[..., None] / 2).min(axis=(0, 1))
+        bb_max = (xy + size[..., None] / 2).max(axis=(0, 1))
+        scale = (1 - 2 * margin) / (bb_max - bb_min).max()
+        offset = 0.5 - ((bb_min + bb_max) / 2) * scale
+        return xy * scale + offset, size * scale
+
+    shape1 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    shape2 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    shape3 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    shape4 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+
+    # --------- Positivo ---------
+    xy_pos, size_pos, shapes_pos, color_pos = decorate_shapes(
+        [shape1.clone(), shape1.clone(), shape1.clone()],
+        max_size=max_size, min_size=min_size, color=color, align=True
+    )
+    xy_pos, size_pos = normalize_scene(xy_pos, size_pos)
+    sample_pos = (xy_pos, size_pos, shapes_pos, color_pos)
+    # --------- Negativo ---------
+    xy_neg, size_neg, shapes_neg, color_neg = decorate_shapes(
+        [shape2.clone(), shape3.clone(), shape4.clone()],
+        max_size=max_size, min_size=min_size, color=color, align=True,
+    )
+    xy_neg, size_neg = normalize_scene(xy_neg, size_neg)
+    sample_neg = (xy_neg, size_neg, shapes_neg, color_neg)
     return sample_neg, sample_pos
 
 
