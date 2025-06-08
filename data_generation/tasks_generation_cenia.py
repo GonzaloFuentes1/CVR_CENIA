@@ -1,5 +1,6 @@
 import numpy as np
 from matplotlib.path import Path
+from shapely import Polygon
 
 from data_generation.shape import Shape
 from data_generation.utils import (check_square, sample_contact_many,
@@ -542,21 +543,28 @@ def task_svrt_8(
     # posición global del centro del outer
     xy_outer = np.random.rand(2) * (1 - size_outer) + size_outer / 2
 
+    contour_outer = outer.get_contour() * size_outer + xy_outer
+    contour_inner = inner.get_contour() * size_inner
+
     max_attempts = 10
 
     done_flag = False
     for _ in range(max_attempts):
         xy_inner_rel = sample_position_inside_1(outer, inner, scale=size_inner / size_outer)
         if len(xy_inner_rel) > 0:
-            xy_inner = xy_inner_rel[0] * size_outer + xy_outer
-            done_flag = True
+            for pos in xy_inner_rel:
+                xy_inner = pos * size_outer + xy_outer
+                contour_inner_temp = contour_inner + xy_inner
+                if Polygon(contour_outer).contains_properly(Polygon(contour_inner_temp)):
+                    done_flag = True
+                    break
+        if done_flag:
             break
         else:
             outer = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
             inner = outer.clone()
     if not done_flag:
-        xy_inner = xy_outer 
-        print("Fallo al encontrar posición válida para inner dentro de outer.")
+        raise RuntimeError("No se pudo encontrar una posición válida para la clase positiva.")
 
     xy_pos = np.stack([xy_outer, xy_inner])[:, None, :]
     size_pos = np.array([[size_outer], [size_inner]])
@@ -584,20 +592,27 @@ def task_svrt_8(
         # posición global del centro del outer
         xy_outer = np.random.rand(2) * (1 - size_outer) + size_outer / 2
 
+        contour_outer = outer.get_contour()*size_outer + xy_outer
+        contour_inner = inner.get_contour()*size_inner
+
         max_attempts = 10
         done_flag = False
         for _ in range(max_attempts):
             xy_inner_rel = sample_position_inside_1(outer, inner, scale=size_inner / size_outer)
             if len(xy_inner_rel) > 0:
-                xy_inner = xy_inner_rel[0] * size_outer + xy_outer
-                done_flag = True
+                for pos in xy_inner_rel:
+                    xy_inner = pos * size_outer + xy_outer
+                    contour_inner_temp = contour_inner + xy_inner
+                    if Polygon(contour_outer).contains_properly(Polygon(contour_inner_temp)):
+                        done_flag = True
+                        break
+            if done_flag:
                 break
             else:
                 outer = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
                 inner = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
         if not done_flag:
-            xy_inner = xy_outer
-            print("Fallo al encontrar posición válida para inner dentro de outer.")
+            raise RuntimeError("No se pudo encontrar una posición válida para la clase negativa.")
 
         xy_neg = np.stack([xy_outer, xy_inner])[:, None, :]
         size_neg = np.array([[size_outer], [size_inner]])
