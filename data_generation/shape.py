@@ -226,17 +226,6 @@ class Shape(object):
             ])
             self.x_pixels, self.y_pixels = pts[:, 0], pts[:, 1]
 
-        elif type == 'arrow_line':
-            pts = np.array([
-                [0.5, 0.0],
-                [-0.5, 0.0],
-                [-0.2, 0.3],
-                [-0.5, 0.0],
-                [-0.2, -0.3],
-                [-0.5, 0.0],
-            ])
-            self.x_pixels, self.y_pixels = pts[:, 0], pts[:, 1]
-
         if rotate:
             # Aplicar rotación en ángulo aleatorio
             angle = np.random.rand() * 2 * np.pi
