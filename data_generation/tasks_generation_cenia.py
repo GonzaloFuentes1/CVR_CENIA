@@ -1,16 +1,13 @@
 import numpy as np
+from matplotlib.path import Path
 
 from data_generation.shape import Shape
-from data_generation.utils import (
-    sample_contact_many,
-    sample_position_inside_1,
-    sample_positions_align,
-    sample_positions_bb,
-    sample_random_colors,
-    sample_positions_square,
-    check_square,
-    sample_positions_equidist
-)
+from data_generation.utils import (check_square, sample_contact_many,
+                                   sample_position_inside_1,
+                                   sample_positions_align, sample_positions_bb,
+                                   sample_positions_equidist,
+                                   sample_positions_square,
+                                   sample_random_colors)
 
 # ---------- Generador de figuras ----------
 
@@ -293,18 +290,19 @@ def task_svrt_4(
     min_size: float = 0.2,
     color: bool = False,
     rigid_type: str = 'polygon',
-    max_tries: int = 30,
+    max_tries: int = 1000,
 ):
     """
     SVRT #4 – Devuelve (sample_neg, sample_pos).
     sample_pos: figura chica completamente dentro de la grande (clase 1)
-    sample_neg: figuras separadas, una grande y otra chica, sin solapamiento (clase 0)
+    sample_neg: mismas figuras separadas, sin inclusión ni solapamiento (clase 0)
     """
     if min_size is None:
         raise ValueError("min_size debe estar definido.")
 
+    border_margin = 0.01
     size_outer = max_size
-    size_inner = min_size*size_outer
+    size_inner = min_size * size_outer
 
     # ==== CLASE POSITIVA ====
     if shape_mode == 'rigid':
@@ -321,16 +319,21 @@ def task_svrt_4(
     inner.scale(size_inner)
 
     for _ in range(max_tries):
-        xy_outer = np.random.rand(2) * (1 - size_outer) + size_outer / 2
-        xy_inner_rel = sample_position_inside_1(outer, inner, scale=1- (size_inner / size_outer))
+        xy_outer = np.random.rand(2) * (1 - size_outer - 2 * border_margin) + size_outer / 2 + border_margin
+        xy_inner_rel = sample_position_inside_1(outer, inner, scale=1 - (size_inner / size_outer))
         if len(xy_inner_rel) == 0:
             continue
         xy_inner = xy_inner_rel[0] + xy_outer
+
+        contour_outer = outer.get_contour() + xy_outer
         contour_inner = inner.get_contour() + xy_inner
-        if ((0 <= contour_inner).all() and (contour_inner <= 1).all()):
+
+        path_outer = Path(contour_outer)
+        if ((0 <= contour_inner).all() and (contour_inner <= 1).all()
+            and path_outer.contains_points(contour_inner).all()):
             break
     else:
-        raise RuntimeError("No se pudo encontrar una posición válida para la clase positiva.")
+        raise RuntimeError("No se pudo generar clase positiva con inclusión real.")
 
     xy_pos = np.stack([xy_outer, xy_inner])[:, None, :]
     size_pos = np.array([[1.0], [1.0]])
@@ -345,29 +348,26 @@ def task_svrt_4(
     sample_pos = (xy_pos, size_pos, shapes_pos, color_pos)
 
     # ==== CLASE NEGATIVA ====
-    if shape_mode == 'rigid':
-        n_a = n_sides
-        n_b = np.random.choice([
-            k for k in range(poly_min_sides, poly_max_sides) if k != n_sides
-        ])
-    else:
-        n_a = n_b = n_sides
-
-    shape_a = create_shape(shape_mode, rigid_type, radius, hole_radius, n_a, fourier_terms)
-    shape_b = create_shape(shape_mode, rigid_type, radius, hole_radius, n_b, fourier_terms)
-    shape_a.scale(size_outer)
-    shape_b.scale(size_inner)
+    shape_a = outer
+    shape_b = inner
 
     for _ in range(max_tries):
-        xy_a = np.random.rand(2) * (1 - size_outer) + size_outer / 2
-        xy_b = np.random.rand(2) * (1 - size_inner) + size_inner / 2
+        xy_a = np.random.rand(2) * (1 - size_outer - 2 * border_margin) + size_outer / 2 + border_margin
+        xy_b = np.random.rand(2) * (1 - size_inner - 2 * border_margin) + size_inner / 2 + border_margin
+
         contour_a = shape_a.get_contour() + xy_a
         contour_b = shape_b.get_contour() + xy_b
-        dist = np.min(np.linalg.norm(contour_a[:, None, :] - contour_b[None, :, :], axis=-1))
-        if dist > 0.01:
+
+        path_a = Path(contour_a)
+        path_b = Path(contour_b)
+
+        a_in_b = path_b.contains_points(contour_a).any()
+        b_in_a = path_a.contains_points(contour_b).any()
+
+        if not (a_in_b or b_in_a):
             break
     else:
-        raise RuntimeError("No se pudo generar clase negativa sin superposición.")
+        raise RuntimeError("No se pudo generar clase negativa sin inclusión.")
 
     xy_neg = np.stack([xy_a, xy_b])[:, None, :]
     size_neg = np.array([[1.0], [1.0]])
@@ -863,14 +863,114 @@ def task_svrt_13(
     poly_max_sides: int = 10,
     max_size: float = 0.4,
     min_size: float | None = 0.2,
+    delta_min: float = 0.01,
+    delta_max: float = 0.3,
     color: bool = False,
-    rigid_type: str = 'polygon'
+    rigid_type: str = 'polygon',
+    max_tries: int = 30,
 ):
-    """
-    SVRT #13 – Devuelve...
-    """
-    sample_pos = False
-    sample_neg = False
+    def center_scene_without_scaling(xy, size):
+        bb_min = (xy - size[..., None] / 2).min(axis=(0, 1))
+        bb_max = (xy + size[..., None] / 2).max(axis=(0, 1))
+        bb_center = (bb_min + bb_max) / 2
+        canvas_center = np.array([0.5, 0.5])
+        delta = canvas_center - bb_center
+        return xy + delta
+
+    if min_size is None:
+        raise ValueError("min_size debe estar definido.")
+
+    # === 1. Crear una figura grande y una figura chica ===
+    shape_big = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    shape_big.scale(max_size)
+
+    shape_small = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    shape_small.scale(min_size)
+
+    # === 2. Ubicar las dos figuras grandes sin solaparse ===
+    for _ in range(max_tries):
+        xy_big, _, _, _ = decorate_shapes(
+            [shape_big, shape_big],
+            max_size=max_size,
+            min_size=min_size,
+            size=False,
+            rotate=False,
+            flip=False,
+            color=False,
+            align=True
+        )
+        dist = np.linalg.norm(xy_big[0, 0] - xy_big[1, 0])
+        if dist > max_size:
+            break
+    else:
+        raise RuntimeError("No se pudo ubicar figuras grandes sin solapamiento.")
+
+    pos_big1 = xy_big[0, 0]
+    pos_big2 = xy_big[1, 0]
+
+    # === 3. Clase POSITIVA ===
+    for _ in range(max_tries):
+        delta = np.random.uniform(delta_min, delta_max, size=2)
+        pos_small1 = pos_big1 + delta
+        pos_small2 = pos_big2 + delta
+
+        dist_11 = np.linalg.norm(pos_small1 - pos_big1)
+        dist_22 = np.linalg.norm(pos_small2 - pos_big2)
+        dist_12 = np.linalg.norm(pos_small1 - pos_small2)
+
+        if dist_11 > (max_size + min_size) / 2 and dist_22 > (max_size + min_size) / 2 and dist_12 > min_size:
+            break
+    else:
+        raise RuntimeError("No se pudo ubicar las figuras chicas sin solapamiento (positiva).")
+
+    xy_pos = np.stack([pos_big1, pos_small1, pos_big2, pos_small2])[:, None, :]
+    xy_pos = center_scene_without_scaling(xy_pos, np.ones((4, 1)))
+    size_pos = np.ones((4, 1))
+    shapes_pos = [[shape_big], [shape_small], [shape_big], [shape_small]]
+
+    if color:
+        color_pos = sample_random_colors(4)
+        color_pos = [color_pos[i:i+1] for i in range(4)]
+    else:
+        color_pos = [np.zeros((1, 3), dtype=np.float32) for _ in range(4)]
+
+    sample_pos = (xy_pos, size_pos, shapes_pos, color_pos)
+
+    # === 4. Clase NEGATIVA: delta + ruido angular ===
+    for _ in range(max_tries):
+        delta_base = np.random.uniform(delta_min, delta_max, size=2)
+        angle = np.random.uniform(0, 2 * np.pi)
+        r = np.random.uniform(0, delta_max)
+        noise = r * np.array([np.cos(angle), np.sin(angle)])
+
+        delta1 = delta_base
+        delta2 = delta_base + noise
+
+        pos_small1 = pos_big1 + delta1
+        pos_small2 = pos_big2 + delta2
+
+        d11 = np.linalg.norm(pos_small1 - pos_big1)
+        d22 = np.linalg.norm(pos_small2 - pos_big2)
+        d12 = np.linalg.norm(pos_small1 - pos_small2)
+
+        if d11 > (max_size + min_size) / 2 and d22 > (max_size + min_size) / 2 and d12 > min_size:
+            break
+    else:
+        raise RuntimeError("No se pudo ubicar composiciones negativas válidas.")
+
+    xy_neg = np.stack([pos_big1, pos_small1, pos_big2, pos_small2])[:, None, :]
+    xy_neg = center_scene_without_scaling(xy_neg, np.ones((4, 1)))
+    size_neg = np.ones((4, 1))
+    shapes_neg = [[shape_big], [shape_small], [shape_big], [shape_small]]
+
+    if color:
+        color_neg = sample_random_colors(4)
+        color_neg = [color_neg[i:i+1] for i in range(4)]
+    else:
+        color_neg = [np.zeros((1, 3), dtype=np.float32) for _ in range(4)]
+
+    sample_neg = (xy_neg, size_neg, shapes_neg, color_neg)
+
     return sample_neg, sample_pos
 
 
