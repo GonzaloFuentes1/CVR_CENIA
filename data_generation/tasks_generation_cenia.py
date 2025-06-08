@@ -7,6 +7,9 @@ from data_generation.utils import (
     sample_positions_align,
     sample_positions_bb,
     sample_random_colors,
+    sample_positions_square,
+    check_square,
+    sample_positions_equidist
 )
 
 # ---------- Generador de figuras ----------
@@ -420,10 +423,43 @@ def task_svrt_6(
     rigid_type: str = 'polygon'
 ):
     """
-    SVRT #6 – Devuelve...
+    SVRT #6 – Clase 1: dos pares de figuras idénticas, distancias entre figuras idénticas son iguales en ambos pares
+            - Clase 0: dos pares de figuras idénticas
     """
-    sample_pos = False
-    sample_neg = False
+
+    # Clase 0:
+    shape1 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    shape2 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    shapes = [shape1.clone(), shape1.clone(), shape2.clone(), shape2.clone()]
+
+    equal_dist_flag = True
+
+    while equal_dist_flag:    
+        sample_neg = decorate_shapes(shapes, max_size=max_size * 2 * 0.33, min_size=min_size, color=color) 
+        xy = sample_neg[0][:, 0, :]  # shape (4, 2)
+        # Comprobar si las distancias entre figuras idénticas son iguales
+        dist1 = np.linalg.norm(xy[0] - xy[1])  
+        dist2 = np.linalg.norm(xy[2] - xy[3])
+        if np.abs(dist1 - dist2) > 0.01:
+            equal_dist_flag = False
+
+
+    # Clase 1:
+    shape1 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    shape2 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    shapes = [shape1.clone(), shape1.clone(), shape2.clone(), shape2.clone()]
+
+    size = np.full((4, 1), fill_value=max_size * 0.33)
+    xy = sample_positions_equidist(size)
+    xy = xy[:, None, :]  # shape (4, 1, 2)
+    if color:
+        colors = sample_random_colors(4)
+        colors = [colors[i:i+1] for i in range(4)]
+    else:
+        colors = [np.array([0, 0, 0], dtype=np.float32).reshape(1, 3) for _ in range(4)]
+    shapes_wrapped = [[s] for s in shapes]
+    sample_pos = (xy, size, shapes_wrapped, colors)
+
     return sample_neg, sample_pos
 
 
@@ -506,7 +542,7 @@ def task_svrt_8(
             done_flag = True
             break
         else:
-            outer.randomize()
+            outer = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
             inner = outer.clone()
     if not done_flag:
         xy_inner = xy_outer 
@@ -547,8 +583,8 @@ def task_svrt_8(
                 done_flag = True
                 break
             else:
-                outer.randomize()
-                inner.randomize()
+                outer = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+                inner = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
         if not done_flag:
             xy_inner = xy_outer
             print("Fallo al encontrar posición válida para inner dentro de outer.")
@@ -613,10 +649,38 @@ def task_svrt_10(
     rigid_type: str = 'polygon'
 ):
     """
-    SVRT #10 – Devuelve...
+    SVRT #10 – Devuelve sample_neg, sample_pos
+    Clase 0 (sample_neg): Cuatro figuras idénticas hasta traslación
+    Clase 1 (sample_pos): Cuatro figuras idénticas hasta traslación, sus centros forman un cuadrado
     """
-    sample_pos = False
-    sample_neg = False
+
+    size = np.full((4, 1), fill_value=max_size / 3)
+
+    shape = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    shapes = [shape.clone() for _ in range(4)]
+
+    # Sample neg: cuatro figuras idénticas hasta traslación
+    square_flag = True
+    while square_flag:
+        sample_neg = decorate_shapes(shapes, max_size=max_size * 2/3, min_size=min_size, color=color)
+        xy_neg = sample_neg[0][:, 0, :]  # shape (4, 2)
+        # Comprobar si los centros forman un cuadrado
+        square_flag = check_square(xy_neg)
+
+    # Sample pos: cuatro figuras idénticas hasta traslación, sus centros forman un cuadrado
+    shape = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    xy = sample_positions_square(size)
+
+    if color:
+        colors_pos = sample_random_colors(4)
+        colors_pos = [colors_pos[i:i+1] for i in range(4)]
+    else:
+        colors_pos = [np.array([0, 0, 0], dtype=np.float32).reshape(1, 3) for _ in range(4)]
+    
+    shapes_pos = [[shape.clone()] for _ in range(4)]
+    xy_pos = xy[:, None, :]  # shape (4, 1, 2)
+    sample_pos = (xy_pos, size, shapes_pos, colors_pos)
+
     return sample_neg, sample_pos
 
 
@@ -695,10 +759,58 @@ def task_svrt_12(
     rigid_type: str = 'polygon'
 ):
     """
-    SVRT #13 – Devuelve...
+    SVRT #12 – Clase 1: dos figuras pequeñas, una grande. Las figuras pequeñas están más cerca entre sí que de la figura grande.
+            - Clase 0: dos figuras pequeñas, una grande. Alguna de las figuras pequeñas está más cerca de la figura grande que de la otra figura pequeña.
     """
-    sample_pos = False
-    sample_neg = False
+
+    # Clase 1: dos figuras pequeñas, una grande. Las figuras pequeñas están más cerca entre sí que de la figura grande.
+    shapes = [create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate) for _ in range(3)]
+    size = np.array([[max_size * 0.6], [max_size * 0.2], [max_size * 0.2]])
+
+    dist_flag = True
+    while dist_flag:
+        xy = sample_positions_bb(size[None, ...])[0]
+        # Comprobar distancias
+        dist1 = np.linalg.norm(xy[0] - xy[1])
+        dist2 = np.linalg.norm(xy[0] - xy[2])
+        dist3 = np.linalg.norm(xy[1] - xy[2])
+        if dist1 - 1e-2 > dist3 and dist2 - 1e-2 > dist3:
+            dist_flag = False
+
+    xy = xy[:, None, :]  # shape (3, 1, 2)
+    if color:
+        colors = sample_random_colors(3)
+        colors = [colors[i:i+1] for i in range(3)]
+    else:
+        colors = [np.array([0, 0, 0], dtype=np.float32).reshape(1, 3) for _ in range(3)]
+    
+    shapes_wrapped = [[s] for s in shapes]
+    sample_pos = (xy, size, shapes_wrapped, colors)
+
+    # Clase 0: dos figuras pequeñas, una grande. Alguna de las figuras pequeñas está más cerca de la figura grande que de la otra figura pequeña.
+
+    shapes = [create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate) for _ in range(3)]
+    size = np.array([[max_size * 0.6], [max_size * 0.2], [max_size * 0.2]])
+
+    dist_flag = True
+    while dist_flag:
+        xy = sample_positions_bb(size[None, ...])[0]
+        # Comprobar distancias
+        dist1 = np.linalg.norm(xy[0] - xy[1])
+        dist2 = np.linalg.norm(xy[0] - xy[2])
+        dist3 = np.linalg.norm(xy[1] - xy[2])
+        if dist1 + 1e-3 < dist3 or dist2 + 1e-3 < dist3:
+            dist_flag = False
+
+    xy = xy[:, None, :]  # shape (3, 1, 2)
+    if color:
+        colors = sample_random_colors(3)
+        colors = [colors[i:i+1] for i in range(3)]
+    else:
+        colors = [np.array([0, 0, 0], dtype=np.float32).reshape(1, 3) for _ in range(3)]
+    shapes_wrapped = [[s] for s in shapes]
+    sample_neg = (xy, size, shapes_wrapped, colors)
+
     return sample_neg, sample_pos
 
 
@@ -785,10 +897,41 @@ def task_svrt_15(
     rigid_type: str = 'polygon'
 ):
     """
-    SVRT #15 – Devuelve...
+    SVRT #15 – Devuelve sample_neg, sample_pos
+    Clase 0 (sample_neg): Cuatro figuras distintas, sus centros forman un cuadrado
+    Clase 1 (sample_pos): Cuatro figuras idénticas hasta traslación, sus centros forman un cuadrado
     """
-    sample_pos = False
-    sample_neg = False
+
+    size = np.full((4, 1), fill_value=max_size / 3)
+
+    # Sample neg: cuatro figuras distintas, sus centros forman un cuadrado
+    
+    shapes = [
+        create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate) for _ in range(4)
+    ]
+    xy = sample_positions_square(size)
+    if color:
+        colors_neg = sample_random_colors(4)
+        colors_neg = [colors_neg[i:i+1] for i in range(4)]
+    else:
+        colors_neg = [np.array([0, 0, 0], dtype=np.float32).reshape(1, 3) for _ in range(4)]
+    shapes_neg = [[s] for s in shapes]
+    xy_neg = xy[:, None, :]  # shape (4, 1, 2)
+    sample_neg = (xy_neg, size, shapes_neg, colors_neg)
+
+    # Sample pos: cuatro figuras idénticas hasta traslación, sus centros forman un cuadrado
+
+    shape = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    shapes = [[shape.clone()] for _ in range(4)]
+    xy_pos = sample_positions_square(size)
+    if color:
+        colors_pos = sample_random_colors(4)
+        colors_pos = [colors_pos[i:i+1] for i in range(4)]
+    else:
+        colors_pos = [np.array([0, 0, 0], dtype=np.float32).reshape(1, 3) for _ in range(4)]
+    xy_pos = xy_pos[:, None, :]  # shape (4, 1, 2)
+    sample_pos = (xy_pos, size, shapes, colors_pos)
+
     return sample_neg, sample_pos
 
 
@@ -905,10 +1048,39 @@ def task_svrt_20(
     rigid_type: str = 'polygon'
 ):
     """
-    SVRT #20 – Devuelve...
+    SVRT #20 – Devuelve sample_neg, sample_pos
+    Clase 0 (sample_neg): Dos figuras
+    Clase 1 (sample_pos): Dos figuras, una es reflexión de la otra con respecto a la bisectriz perpendicular a la línea que une sus centros
     """
-    sample_pos = False
-    sample_neg = False
+
+    # Clase 0:
+    shape1 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms)
+    shape2 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms)
+
+    sample_neg = decorate_shapes([shape1, shape2], max_size=max_size, min_size=min_size, color=color, size=True)
+
+    # Clase 1:
+    shape1 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms)
+    shape2 = shape1.clone()
+
+    size = np.array([[max_size * 0.5], [max_size * 0.5]])
+    size_aux = size * np.sqrt(2)
+    xy = sample_positions_bb((size_aux[None, ...]))[0]
+
+    # Calcular el ángulo de rotación para que shape2 sea la reflexión de shape1
+    angle = np.arctan2(xy[1, 1] - xy[0, 1], xy[1, 0] - xy[0, 0])
+    shape2.flip()
+    shape1.rotate(angle)
+    shape2.rotate(angle)
+    xy = xy[:, None, :]  # shape (2, 1, 2)
+    if color:
+        colors = sample_random_colors(2)
+        colors = [colors[i:i+1] for i in range(2)]
+    else:
+        colors = [np.array([0, 0, 0], dtype=np.float32).reshape(1, 3) for _ in range(2)]
+    shapes = [[shape1], [shape2]]
+    sample_pos = (xy, size, shapes, colors)
+
     return sample_neg, sample_pos
 
 
@@ -929,10 +1101,21 @@ def task_svrt_21(
     rigid_type: str = 'polygon'
 ):
     """
-    SVRT #21 – Devuelve...
+    SVRT #10 – Devuelve sample_neg, sample_pos
+    Clase 0 (sample_neg): Dos figuras
+    Clase 1 (sample_pos): Dos figuras idénticas hasta rotación, traslación, y escalamiento
     """
-    sample_pos = False
-    sample_neg = False
+
+    # Clase 0:
+    shape1 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms)
+    shape2 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms)
+    sample_neg = decorate_shapes([shape1, shape2], max_size=max_size, min_size=min_size, color=color, size=True)
+
+    # Clase 1:
+    shape1 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms)
+    shape2 = shape1.clone()
+    sample_pos = decorate_shapes([shape1, shape2], max_size=max_size, min_size=min_size, color=color, size=True, rotate=True)
+
     return sample_neg, sample_pos
 
 
