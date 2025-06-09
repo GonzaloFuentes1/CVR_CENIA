@@ -283,6 +283,128 @@ def sample_positions_align(size, n_sample_min=1, max_tries=10, n_samples_over=10
     return xy
 
 
+def sample_positions_symmetric_pairs(size, margin_x=0.08, margin_y=0.08, min_dist=0.01, max_tries=100):
+    """
+    Genera posiciones (x, y) para 3 pares de objetos simétricos respecto al eje x=0.5.
+    Asegura que no se solapen. 
+    size: (n, 1) donde n=6 (seis objetos).
+    Return: xy de shape (6, 2)
+    """
+    assert size.shape[0] == 6, "size debe tener longitud 6 (3 pares)."
+    xy = np.zeros((6, 2))
+    tries = 0
+
+    while tries < max_tries:
+        x_vals = []
+        y_vals = []
+        # Generar 3 pares
+        for pair in range(3):
+            s = size[2 * pair, 0]
+            # Escoge x para la izquierda (margen, centro)
+            x_l = np.random.uniform(margin_x + s / 2, 0.5 - min_dist - s / 2)
+            # Su simétrico
+            x_r = 1.0 - x_l
+            # Escoge y para ambos (margen inferior, superior)
+            y = np.random.uniform(margin_y + s / 2, 1 - margin_y - s / 2)
+            x_vals.extend([x_l, x_r])
+            y_vals.extend([y, y])
+
+        xy[:, 0] = x_vals
+        xy[:, 1] = y_vals
+
+        # Chequea no solapamiento entre objetos (usando distancia euclideana + tamaños)
+        min_ok = True
+        for i in range(6):
+            for j in range(i + 1, 6):
+                dx = xy[i, 0] - xy[j, 0]
+                dy = xy[i, 1] - xy[j, 1]
+                dist = np.sqrt(dx ** 2 + dy ** 2)
+                min_allowed = (size[i, 0] + size[j, 0]) / 2 + min_dist
+                if dist < min_allowed:
+                    min_ok = False
+        if min_ok:
+            break
+        tries += 1
+
+    if tries >= max_tries:
+        print("Advertencia: No se pudo encontrar disposición sin solapamiento, devolviendo último intento.")
+
+    return xy
+
+
+def sample_points_in_circle(
+    n,
+    radius=0.2,
+    center=(0.5, 0.5),
+    on_edge=False
+):
+    """
+    Devuelve una lista de n coordenadas (x, y) dentro de un círculo de radio `radius`
+    centrado en `center`.
+    - Si on_edge es True, todos los puntos estarán exactamente en el borde.
+    - Si on_edge es False, todos los puntos se ubican aleatoriamente dentro del área.
+    """
+    center = np.asarray(center)
+    angles = np.random.uniform(0, 2 * np.pi, size=n)
+    if on_edge:
+        rhos = np.full(n, radius)
+    else:
+        rhos = radius * np.sqrt(np.random.rand(n))
+    coords = center + np.stack([rhos * np.cos(angles), rhos * np.sin(angles)], axis=1)
+    return coords
+
+
+def sample_positions_circle(
+    sizes,                 # array (4, 1) o (4,)
+    odd_radius=0.2,        # radio del círculo donde puede ir el odd
+    min_circle_radius=0.10,# menor distancia del círculo de clones al odd
+    max_circle_radius=1,# mayor distancia posible (ajusta según tamaño)
+    max_tries=200
+):
+    """
+    Genera posiciones (x, y) para 3 figuras iguales en círculo alrededor del odd,
+    con distancia aleatoria (en cada intento) dentro de [min_circle_radius, max_circle_radius].
+    No hay solapamiento y todo está dentro de [0,1]^2.
+    """
+    sizes = np.array(sizes).flatten()
+    margin = np.max(sizes) / 2
+
+    tries = 0
+    while tries < max_tries:
+        # 1. Elige centro del odd en círculo (usa sample_points_in_circle)
+        odd_center = sample_points_in_circle(1, radius=odd_radius, center=(0.5, 0.5))[0]
+
+        # 2. Sortea radio para las 3 iguales (aleatorio en cada intento)
+        circle_radius = np.random.uniform(min_circle_radius, max_circle_radius)
+
+        # 3. Genera 3 puntos en círculo alrededor del odd (en el borde)
+        base_pos = sample_points_in_circle(3, radius=circle_radius, center=odd_center, on_edge=True)
+
+        xy = np.zeros((4, 2))
+        xy[3] = odd_center    # idx 3 = odd (puedes randomizar el idx si prefieres)
+        xy[:3] = base_pos
+
+        # 4. Chequea bordes
+        if not np.all((xy >= margin) & (xy <= 1 - margin)):
+            tries += 1
+            continue
+
+        # 5. Chequea solapamiento
+        ok = True
+        for i in range(4):
+            for j in range(i + 1, 4):
+                dist = np.linalg.norm(xy[i] - xy[j])
+                min_dist = (sizes[i] + sizes[j]) / 2
+                if dist < min_dist:
+                    ok = False
+        if ok:
+            return xy
+        tries += 1
+
+    print("Advertencia: No se pudo encontrar disposición sin solapamiento tras varios intentos.")
+    return xy
+
+
 def sample_random_colors(n_samples):
     h = np.random.rand(n_samples)
     s = np.random.rand(n_samples) * 0.5 + 0.5

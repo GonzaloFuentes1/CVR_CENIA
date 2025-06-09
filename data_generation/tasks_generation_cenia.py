@@ -7,6 +7,8 @@ from data_generation.utils import (
     sample_positions_bb,
     sample_positions_align,
     sample_random_colors,
+    sample_positions_symmetric_pairs,
+    sample_positions_circle
 )
 
 
@@ -44,7 +46,7 @@ def create_shape(
 
 # ---------- Decorador de figuras ----------
 
-def decorate_shapes(shapes, max_size=0.4, min_size=None, size=False, rotate=False, color=False, flip=False, align=False):
+def decorate_shapes(shapes, max_size=0.4, min_size=None, size=None, rotate=False, color=False, flip=False, align=False, mirror=False, circle=False):
     """
     Adorna N figuras con tamaño, posición (sin solapamiento), rotación, flip y color.
     Devuelve: (xy, size, shape_wrapped, colors)
@@ -58,10 +60,15 @@ def decorate_shapes(shapes, max_size=0.4, min_size=None, size=False, rotate=Fals
     else:
         size = np.full((n, 1), fill_value=max_size/2)
 
-    # Posiciones sin superposición usando bounding boxes
     size_batch = size[None, ...]  # shape (1, n, 1)
     if align:
         xy_vals = sample_positions_align(size_batch)[0]  # shape (n, 2)
+
+    elif mirror:
+        xy_vals = sample_positions_symmetric_pairs(size_batch[0])
+
+    elif circle:
+        xy_vals = sample_positions_circle(size_batch[0])  # shape (n, 2)
 
     else:
         xy_vals = sample_positions_bb(size_batch)[0]  # shape (n, 2)
@@ -641,19 +648,50 @@ def task_svrt_16(
     n_sides: int = 5,
     fourier_terms: int = 20,
     symm_rotate: bool = True,
-    poly_min_sides: int = 3,
-    poly_max_sides: int = 10,
-    max_size: float = 0.4,
-    min_size: float | None = 0.2,
+    max_size: float = 0.2,
+    min_size: float | None = 0.13,
     color: bool = False,
     rigid_type: str = 'polygon'
 ):
     """
-    SVRT #16 – Devuelve...
+    SVRT #16 – Devuelve:
+    - Clase 0: seis figuras idénticas en posiciones simétricas respecto al eje vertical (no reflejadas).
+    - Clase 1: mismas posiciones, pero las tres figuras de la derecha son el reflejo especular de las de la izquierda.
     """
-    sample_pos = False
-    sample_neg = False
+    n_pairs = 3
+    base_shape = create_shape(
+        shape_mode, rigid_type, radius, hole_radius,
+        n_sides, fourier_terms, symm_rotate
+    )
+
+    # --- Clase 1 ---
+    shapes_pos = []
+    for i in range(2 * n_pairs):
+        s = base_shape.clone()
+        # Si está a la derecha (pares impares, i=1,3,5): flip respecto al eje vertical
+        if i % 2 == 1:
+            s.flip()
+        shapes_pos.append(s)
+    sample_pos = decorate_shapes(
+        shapes_pos,
+        max_size=max_size,
+        min_size=min_size,
+        color=color,
+        mirror=True
+    )
+    
+    # --- Clase 0 ---
+    shapes_neg = [base_shape.clone() for _ in range(2 * n_pairs)]
+    sample_neg = decorate_shapes(
+        shapes_neg,
+        max_size=max_size,
+        min_size=min_size,
+        color=color,
+        mirror=True
+    )
+
     return sample_neg, sample_pos
+
 
 
 # ---------- Tarea SVRT 17 ----------
@@ -665,18 +703,49 @@ def task_svrt_17(
     n_sides: int = 5,
     fourier_terms: int = 20,
     symm_rotate: bool = True,
-    poly_min_sides: int = 3,
-    poly_max_sides: int = 10,
-    max_size: float = 0.4,
-    min_size: float | None = 0.2,
+    max_size: float = 0.13,
+    min_size: float | None = 0.09,
     color: bool = False,
     rigid_type: str = 'polygon'
 ):
     """
-    SVRT #17 – Devuelve...
+    SVRT #17 – Devuelve:
+    - Clase 1: 4 figuras, 3 idénticas y 1 diferente, todas del mismo tamaño. Odd se ubica aleatoriamente en círculo de radio 0.3.
+    - Clase 0: 4 figuras, 3 idénticas y 1 diferente, mismas figuras y tamaños. Posiciones aleatorias.
     """
-    sample_pos = False
-    sample_neg = False
+
+    # No sé si forzar el tamaño de las figuras, pero lo dejo como parámetro
+    min_size = 0.05
+    max_size = 0.3
+
+    base_shape = create_shape(
+        shape_mode, rigid_type, radius, hole_radius,
+        n_sides, fourier_terms, symm_rotate
+    )
+    odd_shape = create_shape(
+        shape_mode, rigid_type, radius, hole_radius,
+        n_sides, fourier_terms, symm_rotate
+    )
+
+    # --- Clase 1 ---
+    shapes_pos = [base_shape.clone() for _ in range(3)] + [odd_shape.clone()]
+    sample_pos = decorate_shapes(
+        shapes_pos,
+        max_size=max_size,
+        min_size=min_size,
+        color=color,
+        circle=True
+    )
+
+    # --- Clase 0 ---
+    shapes_neg = [base_shape.clone() for _ in range(3) ] + [odd_shape.clone()]    
+    sample_neg = decorate_shapes(
+        shapes_neg,
+        max_size=max_size,
+        min_size=min_size,
+        color=color
+    )
+
     return sample_neg, sample_pos
 
 
@@ -697,10 +766,20 @@ def task_svrt_18(
     rigid_type: str = 'polygon'
 ):
     """
-    SVRT #18 – Devuelve...
+    SVRT #18 – Devuelve:
+    - Clase 0: seis figuras idénticas en posiciones simétricas respecto al eje vertical.
+    - Clase 1: seis figuras idénticas posicionadas aleatoriamente.
     """
-    sample_pos = False
-    sample_neg = False
+    # --- Clase 1 ---
+    shape = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    shapes_pos = [shape.clone() for _ in range(6)]
+    sample_pos = decorate_shapes(shapes_pos, max_size=max_size, min_size=min_size, color=color, mirror=True)
+    
+    # --- Clase 0 ---
+    # Opcional: pueden ser iguales o diferentes, pero lo clave es que NO usen mirror=True
+    shapes_neg = [shape.clone() for _ in range(6)]
+    sample_neg = decorate_shapes(shapes_neg, max_size=max_size, min_size=min_size, color=color, mirror=False)
+    
     return sample_neg, sample_pos
 
 
@@ -721,10 +800,35 @@ def task_svrt_19(
     rigid_type: str = 'polygon'
 ):
     """
-    SVRT #19 – Devuelve...
+    SVRT #19 – Devuelve:
+    - Clase 1: dos figuras iguales, solo que una está escalada.
+    - Clase 0: dos figuras diferentes.
     """
-    sample_pos = False
-    sample_neg = False
+
+    # --- Clase 1 ---
+    shape_pos_1 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    scale_factor = np.random.uniform(0.3, 1.5) # Valores arbitrarios
+    shape_pos_2 = shape_pos_1.clone()
+    shape_pos_2.scale(scale_factor)
+    shapes_pos = [shape_pos_1, shape_pos_2]
+    sample_pos = decorate_shapes(
+        shapes_pos,
+        max_size=max_size,
+        min_size=min_size,
+        color=color
+    )
+
+    # --- Clase 0 ---
+    shape_neg_1 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    shape_neg_2 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    shapes_neg = [shape_neg_1, shape_neg_2]    
+    sample_neg = decorate_shapes(
+        shapes_neg,
+        max_size=max_size,
+        min_size=min_size,
+        color=color
+    )
+
     return sample_neg, sample_pos
 
 
