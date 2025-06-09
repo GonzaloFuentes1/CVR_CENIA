@@ -533,6 +533,7 @@ def task_svrt_8(
     Clase 1 (sample_pos): La figura grande contiene a la pequeña, que es igual a la grande (hasta escalamiento y traslación).
     """
 
+
     # Clase 1: Figura grande con figura idéntica escalada dentro
     outer = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
     inner = outer.clone()
@@ -542,6 +543,7 @@ def task_svrt_8(
 
     # posición global del centro del outer
     xy_outer = np.random.rand(2) * (1 - size_outer) + size_outer / 2
+
 
     contour_outer = outer.get_contour() * size_outer + xy_outer
     contour_inner = inner.get_contour() * size_inner
@@ -632,8 +634,8 @@ def task_svrt_8(
 
     return sample_neg, sample_pos
 
-
 # ---------- Tarea SVRT 9 ----------
+
 
 def task_svrt_9(
     shape_mode: str = 'normal',
@@ -1351,8 +1353,104 @@ def task_svrt_23(
     return sample_neg, sample_pos
 
 
+# ---------- Tarea MTS ----------
+
+def task_MTS(
+    shape_mode: str = 'normal',
+    radius: float = 0.5,
+    hole_radius: float = 0.05,
+    n_sides: int = 5,
+    fourier_terms: int = 20,
+    symm_rotate: bool = True,
+    poly_min_sides: int = 3,
+    poly_max_sides: int = 10,
+    max_size: float = 0.4,
+    min_size: float | None = 0.2,
+    color: bool = False,
+    rigid_type: str = 'polygon'
+):
+    """
+    MTS – Devuelve...
+    """
+    sample_pos = False
+    sample_neg = False
+    return sample_neg, sample_pos
+
+
+# ---------- Tarea SD ----------
+
+def task_SD(
+    shape_mode: str = 'normal',
+    radius: float = 0.5,
+    hole_radius: float = 0.05,
+    n_sides: int = 5,
+    fourier_terms: int = 20,
+    symm_rotate: bool = True,
+    poly_min_sides: int = 3,
+    poly_max_sides: int = 10,
+    max_size: float = 0.4,
+    min_size: float | None = 0.2,
+    color: bool = False,
+    rigid_type: str = 'polygon'
+):
+    """
+    SD – Devuelve...
+    """
+    sample_pos = False
+    sample_neg = False
+    return sample_neg, sample_pos
+
+
+# ---------- Tarea SOSD ----------
+
+def task_SOSD(
+    shape_mode: str = 'normal',
+    radius: float = 0.5,
+    hole_radius: float = 0.05,
+    n_sides: int = 5,
+    fourier_terms: int = 20,
+    symm_rotate: bool = True,
+    poly_min_sides: int = 3,
+    poly_max_sides: int = 10,
+    max_size: float = 0.4,
+    min_size: float | None = 0.2,
+    color: bool = False,
+    rigid_type: str = 'polygon'
+):
+    """
+    SOSD – Devuelve...
+    """
+    sample_pos = False
+    sample_neg = False
+    return sample_neg, sample_pos
+
+
+# ---------- Tarea RMTS ----------
+
+def task_RMTS(
+    shape_mode: str = 'normal',
+    radius: float = 0.5,
+    hole_radius: float = 0.05,
+    n_sides: int = 5,
+    fourier_terms: int = 20,
+    symm_rotate: bool = True,
+    poly_min_sides: int = 3,
+    poly_max_sides: int = 10,
+    max_size: float = 0.4,
+    min_size: float | None = 0.2,
+    color: bool = False,
+    rigid_type: str = 'polygon'
+):
+    """
+    RMTS – Devuelve...
+    """
+    sample_pos = False
+    sample_neg = False
+    return sample_neg, sample_pos
+
+
 # ---------- Registro de tareas ----------
-# Tareas SVRT
+# Tareas SVRT y tareas cenia
 TASKS_SVRT = [
     ["task_svrt_1", task_svrt_1],
     ["task_svrt_2", task_svrt_2],
@@ -1377,4 +1475,8 @@ TASKS_SVRT = [
     ["task_svrt_21", task_svrt_21],
     ["task_svrt_22", task_svrt_22],
     ["task_svrt_23", task_svrt_23],
+    ["task_MTS", task_MTS],
+    ["task_SD", task_SD],
+    ["task_SOSD", task_SOSD],
+    ["task_RMTS", task_RMTS]
 ]
