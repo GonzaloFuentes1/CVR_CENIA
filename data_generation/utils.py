@@ -1,8 +1,10 @@
 import os
 import random
+
 import cv2
 import numpy as np
 from PIL import Image
+from itertools import permutations
 
 
 def cat_lists(lists):
@@ -191,6 +193,148 @@ def sample_positions(size, n_sample_min=1, max_tries=10, n_samples_over=100):
         xy_ = np.concatenate([xy_, xy[valid][:n_sample_min-len(xy_)]], 0)
         
     return xy_
+
+def sample_positions_square(size):
+    """
+    Sample positions in [0,1]x[0,1] for 4 objects, such that they are placed in a square formation.
+    size: (n,1) array of object sizes
+    """
+
+    # Generate square
+    square = np.array([[-0.5, -0.5],
+                      [ 0.5, -0.5],
+                      [ 0.5,  0.5],
+                      [-0.5,  0.5]])
+
+    # Scale
+    max_size = size.max() * np.sqrt(2)  
+    scale = np.random.uniform(max_size, 1 - max_size)
+    square *= scale
+
+    # Rotate randomly
+    angle = np.random.rand() * 2 * np.pi
+    rotation_matrix = np.array([[np.cos(angle), -np.sin(angle)],
+                                 [np.sin(angle),  np.cos(angle)]])
+    square_rotated = square @ rotation_matrix
+
+    # Calculate bounding box
+    max_coord = (square_rotated + max_size / 2).max(axis=0)
+    min_coord = (square_rotated - max_size / 2).min(axis=0)
+    w = max_coord[0] - min_coord[0] + max_size
+    if w > 1:
+        scale_max = 1/w
+        scale = np.random.uniform(max_size, scale_max)
+        square_rotated *= scale 
+        max_coord = (square_rotated + max_size / 2).max(axis=0)
+        min_coord = (square_rotated - max_size / 2).min(axis=0)
+        w = max_coord[0] - min_coord[0] + max_size   
+
+    # Locate square
+    position = np.random.uniform(w*0.5, 1 - w*0.5, 2)
+    square_rotated += position 
+
+    xy = square_rotated
+    # print("\n Checking \n")
+    # print(check_square(xy))
+    return xy
+
+def squared_distance(p1, p2):
+    return np.sum((p1 - p2) ** 2)
+
+def check_square(xy):
+
+    for perm in permutations(xy):
+        a, b, c, d = perm
+        d1 = squared_distance(a,b)
+        d2 = squared_distance(b,c)
+        d3 = squared_distance(c,d)  
+        d4 = squared_distance(d,a)
+        diag1 = squared_distance(a,c)
+        diag2 = squared_distance(b,d)
+
+        difs = [abs(d1 - d2), abs(d2 - d3), abs(d3 - d4), abs(d4 - d1)]
+
+        if all(d < 1e-6 for d in difs) and abs(diag1 - diag2) < 1e-6:
+            return True
+    return False
+
+def sample_positions_equidist(size, max_attempts=100, max_inner_attempts=50):
+
+    """
+    Sample positions in [0,1] x [0,1] for 4 objects, such that 
+    distance between 1 and 2 is equal to distance between 3 and 4
+    """
+    n_objects = size.shape[0]
+    if n_objects != 4:
+        raise ValueError("This function only supports 4 objects.")
+
+    p1 = np.random.uniform(size[0]/2, 1 - size[0]/2, 2)
+
+    # Calculate distance from p1 to furthest corner
+    corners = np.array([[0, 0], [1, 0], [1, 1], [0, 1]])
+    # max_distance = np.sqrt(np.max([squared_distance(p1, corner) for corner in corners])) - size[1] * np.sqrt(2) * 0.5
+    max_distance = np.linalg.norm(corners - p1, axis=1).max() - size[1] * np.sqrt(2) * 0.5
+    min_distance = size[0] * np.sqrt(2) * 0.5 + size[1] * np.sqrt(2) * 0.5
+
+    for _ in range(max_attempts):
+
+        dist = np.random.uniform(min_distance, max_distance)
+
+        p2_inner = False
+        for _ in range(max_inner_attempts):
+            angle = np.random.uniform(0, 2 * np.pi)
+            p2 = p1 + dist * np.array([np.cos(angle), np.sin(angle)])           
+            if (0 <= p2[0] - size[1]/2 and p2[1] + size[1]/2 <= 1 and
+                0 <= p2[1] - size[1]/2 and p2[0] + size[1]/2 <= 1):
+                p2_inner = True
+                break
+        
+        # if not p2_inner:
+        #     raise ValueError("Failed to find a valid position for p2 after multiple attempts.")
+        
+        # Calculate position for p3 and p4
+        p3_inner = False
+        for _ in range(max_inner_attempts):
+            p3 = np.random.uniform(size[2]/2, 1 - size[2]/2, 2)
+            if (p1[0] - size[0]/2 <= p3[0] <= p1[0] + size[0]/2 and
+                p1[1] - size[0]/2 <= p3[1] <= p1[1] + size[0]/2) or (
+                p2[0] - size[1]/2 <= p3[0] <= p2[0] + size[1]/2 and
+                p2[1] - size[1]/2 <= p3[1] <= p2[1] + size[1]/2):
+                continue
+            else:
+                p3_inner = True
+                break
+        # if not p3_inner:
+        #     raise ValueError("Failed to find a valid position for p3 after multiple attempts.")
+        
+        p4_inner = False
+        for _ in range(max_inner_attempts):
+            angle = np.random.uniform(0, 2 * np.pi)
+            p4 = p3 + dist * np.array([np.cos(angle), np.sin(angle)])
+            if (0 <= p4[0] - size[3]/2 and p4[1] + size[3]/2 <= 1 and
+                0 <= p4[1] - size[3]/2 and p4[0] + size[3]/2 <= 1):
+                if (p1[0] - size[0]/2 <= p4[0] + size[3]/2 and
+                    p1[0] + size[0]/2 >= p4[0] - size[3]/2 and
+                    p1[1] - size[0]/2 <= p4[1] + size[3]/2 and
+                    p1[1] + size[0]/2 >= p4[1] - size[3]/2) or (
+                    p2[0] - size[1]/2 <= p4[0] + size[3]/2 and
+                    p2[0] + size[1]/2 >= p4[0] - size[3]/2 and
+                    p2[1] - size[1]/2 <= p4[1] + size[3]/2 and
+                    p2[1] + size[1]/2 >= p4[1] - size[3]/2):
+                    continue
+                else:
+                    p4_inner = True
+                    break
+            # if not p4_inner:
+            #     raise ValueError("Failed to find a valid position for p4 after multiple attempts.")
+
+        if p2_inner and p3_inner and p4_inner:
+            break
+
+    if not (p2_inner and p3_inner and p4_inner):
+        raise ValueError("Failed to find valid positions for all objects after multiple attempts.")
+        
+    return np.array([p1, p2, p3, p4])
 
 
 
@@ -455,4 +599,3 @@ def save_image(images, base_path, task_name):
     #     images = (images*255).astype(np.uint8)
     img = Image.fromarray(images).convert('RGB')
     img.save(save_path)
-
