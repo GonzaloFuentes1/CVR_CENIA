@@ -3,15 +3,6 @@ from matplotlib.path import Path
 from shapely import Polygon
 
 from data_generation.shape import Shape
-from data_generation.utils import (
-    sample_contact_many,
-    sample_position_inside_1,
-    sample_positions_bb,
-    sample_positions_align,
-    sample_random_colors,
-    sample_positions_symmetric_pairs,
-    sample_positions_circle
-)
 
 from data_generation.utils import (check_square, sample_contact_many,
                                    sample_position_inside_1,
