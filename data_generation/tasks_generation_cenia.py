@@ -1271,7 +1271,7 @@ def task_svrt_19(
 
     # --- Clase 1 ---
     shape_pos_1 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
-    scale_factor = np.random.uniform(0.3, 1.5) # Valores arbitrarios
+    scale_factor = np.random.uniform(0.3, 2) # Valores arbitrarios
     shape_pos_2 = shape_pos_1.clone()
     shape_pos_2.scale(scale_factor)
     shapes_pos = [shape_pos_1, shape_pos_2]
