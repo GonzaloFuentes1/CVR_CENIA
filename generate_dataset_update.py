@@ -33,6 +33,10 @@ TASKS_IDX = {
     21: "task_svrt_21",
     22: "task_svrt_22",
     23: "task_svrt_23",
+    24: "task_MTS",
+    25: "task_SD",
+    26: "task_SOSD",
+    27: "task_RMTS"
     # puedes ir agregando más como:
     # 2: "task_svrt_2",
     # 3: "task_symmetry_rule",

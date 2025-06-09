@@ -1,8 +1,10 @@
 import os
 import random
+
 import cv2
 import numpy as np
 from PIL import Image
+from itertools import permutations
 
 
 def cat_lists(lists):
@@ -69,9 +71,9 @@ def sample_position_inside_1(s1, s2, scale):
 def sample_position_inside_many(s1, shapes, scales):
     c1 = s1.get_contour()
     c2s = [s2.get_contour() for s2 in shapes]
-    
+
     bbs_2 = np.array([c2.max(0) - c2.min(0) for c2 in c2s]) * np.array(scales)[:,None]
-    
+
     n_shapes = len(shapes)
 
     # sampling points
@@ -82,27 +84,27 @@ def sample_position_inside_many(s1, shapes, scales):
     dists = np.abs(samples[:,:,None,:] - samples[:,None,:,:]) - (bbs_2[None,:,None,:] + bbs_2[None,None,:,:])/2 > 0
     triu_idx = np.triu_indices(n_shapes, k=1)[0]*n_shapes + np.triu_indices(n_shapes, k=1)[1]
     no_overlap = dists.any(3).reshape(500, n_shapes*n_shapes)[:, triu_idx].all(1)
-    
+
     samples = samples[no_overlap]
 
     n_samples_left = len(samples)
     bb_2_ = np.concatenate([bbs_2]*n_samples_left, 0)
-    
+
     samples = samples.reshape([n_samples_left*n_shapes, 2])
-    
+
     p1c = np.concatenate([c1[:-1], c1[1:]], 1)[None,:,:]
     samples = samples[:,None,:]
     res = np.logical_and(
         np.logical_or(
-            p1c[:,:,0:1] < samples[:,:,0:1], 
-            p1c[:,:,2:3] < samples[:,:,0:1]), 
+            p1c[:,:,0:1] < samples[:,:,0:1],
+            p1c[:,:,2:3] < samples[:,:,0:1]),
         np.logical_xor(
-            p1c[:,:,1:2] <= samples[:,:,1:2], 
+            p1c[:,:,1:2] <= samples[:,:,1:2],
             p1c[:,:,3:4] <= samples[:,:,1:2])
         )[:,:,0]
     res1 = (res.sum(1)%2==1)
     res2 = (np.abs(samples - c1[None,:,:]) > bb_2_[:,None,:]/2).any(2).all(1)
-    
+
     res = np.logical_and(res1, res2)
     res = res.reshape([-1, n_shapes]).all(1)
     samples = samples.reshape([-1, n_shapes, 2])
@@ -192,6 +194,148 @@ def sample_positions(size, n_sample_min=1, max_tries=10, n_samples_over=100):
         
     return xy_
 
+def sample_positions_square(size):
+    """
+    Sample positions in [0,1]x[0,1] for 4 objects, such that they are placed in a square formation.
+    size: (n,1) array of object sizes
+    """
+
+    # Generate square
+    square = np.array([[-0.5, -0.5],
+                      [ 0.5, -0.5],
+                      [ 0.5,  0.5],
+                      [-0.5,  0.5]])
+
+    # Scale
+    max_size = size.max() * np.sqrt(2)  
+    scale = np.random.uniform(max_size, 1 - max_size)
+    square *= scale
+
+    # Rotate randomly
+    angle = np.random.rand() * 2 * np.pi
+    rotation_matrix = np.array([[np.cos(angle), -np.sin(angle)],
+                                 [np.sin(angle),  np.cos(angle)]])
+    square_rotated = square @ rotation_matrix
+
+    # Calculate bounding box
+    max_coord = (square_rotated + max_size / 2).max(axis=0)
+    min_coord = (square_rotated - max_size / 2).min(axis=0)
+    w = max_coord[0] - min_coord[0] + max_size
+    if w > 1:
+        scale_max = 1/w
+        scale = np.random.uniform(max_size, scale_max)
+        square_rotated *= scale 
+        max_coord = (square_rotated + max_size / 2).max(axis=0)
+        min_coord = (square_rotated - max_size / 2).min(axis=0)
+        w = max_coord[0] - min_coord[0] + max_size   
+
+    # Locate square
+    position = np.random.uniform(w*0.5, 1 - w*0.5, 2)
+    square_rotated += position 
+
+    xy = square_rotated
+    # print("\n Checking \n")
+    # print(check_square(xy))
+    return xy
+
+def squared_distance(p1, p2):
+    return np.sum((p1 - p2) ** 2)
+
+def check_square(xy):
+
+    for perm in permutations(xy):
+        a, b, c, d = perm
+        d1 = squared_distance(a,b)
+        d2 = squared_distance(b,c)
+        d3 = squared_distance(c,d)  
+        d4 = squared_distance(d,a)
+        diag1 = squared_distance(a,c)
+        diag2 = squared_distance(b,d)
+
+        difs = [abs(d1 - d2), abs(d2 - d3), abs(d3 - d4), abs(d4 - d1)]
+
+        if all(d < 1e-6 for d in difs) and abs(diag1 - diag2) < 1e-6:
+            return True
+    return False
+
+def sample_positions_equidist(size, max_attempts=100, max_inner_attempts=50):
+
+    """
+    Sample positions in [0,1] x [0,1] for 4 objects, such that 
+    distance between 1 and 2 is equal to distance between 3 and 4
+    """
+    n_objects = size.shape[0]
+    if n_objects != 4:
+        raise ValueError("This function only supports 4 objects.")
+
+    p1 = np.random.uniform(size[0]/2, 1 - size[0]/2, 2)
+
+    # Calculate distance from p1 to furthest corner
+    corners = np.array([[0, 0], [1, 0], [1, 1], [0, 1]])
+    # max_distance = np.sqrt(np.max([squared_distance(p1, corner) for corner in corners])) - size[1] * np.sqrt(2) * 0.5
+    max_distance = np.linalg.norm(corners - p1, axis=1).max() - size[1] * np.sqrt(2) * 0.5
+    min_distance = size[0] * np.sqrt(2) * 0.5 + size[1] * np.sqrt(2) * 0.5
+
+    for _ in range(max_attempts):
+
+        dist = np.random.uniform(min_distance, max_distance)
+
+        p2_inner = False
+        for _ in range(max_inner_attempts):
+            angle = np.random.uniform(0, 2 * np.pi)
+            p2 = p1 + dist * np.array([np.cos(angle), np.sin(angle)])           
+            if (0 <= p2[0] - size[1]/2 and p2[1] + size[1]/2 <= 1 and
+                0 <= p2[1] - size[1]/2 and p2[0] + size[1]/2 <= 1):
+                p2_inner = True
+                break
+        
+        # if not p2_inner:
+        #     raise ValueError("Failed to find a valid position for p2 after multiple attempts.")
+        
+        # Calculate position for p3 and p4
+        p3_inner = False
+        for _ in range(max_inner_attempts):
+            p3 = np.random.uniform(size[2]/2, 1 - size[2]/2, 2)
+            if (p1[0] - size[0]/2 <= p3[0] <= p1[0] + size[0]/2 and
+                p1[1] - size[0]/2 <= p3[1] <= p1[1] + size[0]/2) or (
+                p2[0] - size[1]/2 <= p3[0] <= p2[0] + size[1]/2 and
+                p2[1] - size[1]/2 <= p3[1] <= p2[1] + size[1]/2):
+                continue
+            else:
+                p3_inner = True
+                break
+        # if not p3_inner:
+        #     raise ValueError("Failed to find a valid position for p3 after multiple attempts.")
+        
+        p4_inner = False
+        for _ in range(max_inner_attempts):
+            angle = np.random.uniform(0, 2 * np.pi)
+            p4 = p3 + dist * np.array([np.cos(angle), np.sin(angle)])
+            if (0 <= p4[0] - size[3]/2 and p4[1] + size[3]/2 <= 1 and
+                0 <= p4[1] - size[3]/2 and p4[0] + size[3]/2 <= 1):
+                if (p1[0] - size[0]/2 <= p4[0] + size[3]/2 and
+                    p1[0] + size[0]/2 >= p4[0] - size[3]/2 and
+                    p1[1] - size[0]/2 <= p4[1] + size[3]/2 and
+                    p1[1] + size[0]/2 >= p4[1] - size[3]/2) or (
+                    p2[0] - size[1]/2 <= p4[0] + size[3]/2 and
+                    p2[0] + size[1]/2 >= p4[0] - size[3]/2 and
+                    p2[1] - size[1]/2 <= p4[1] + size[3]/2 and
+                    p2[1] + size[1]/2 >= p4[1] - size[3]/2):
+                    continue
+                else:
+                    p4_inner = True
+                    break
+            # if not p4_inner:
+            #     raise ValueError("Failed to find a valid position for p4 after multiple attempts.")
+
+        if p2_inner and p3_inner and p4_inner:
+            break
+
+    if not (p2_inner and p3_inner and p4_inner):
+        raise ValueError("Failed to find valid positions for all objects after multiple attempts.")
+        
+    return np.array([p1, p2, p3, p4])
+
 
 
 def sample_positions_bb(size, n_sample_min=1, max_tries=10, n_samples_over=100):
@@ -227,24 +371,20 @@ def sample_positions_bb(size, n_sample_min=1, max_tries=10, n_samples_over=100):
         
     return xy_
 
-def sample_positions_align(size, n_sample_min=1, max_tries=10, n_samples_over=100):
-    """
-    Aligns all objects along a random line within [0,1]x[0,1], with random distances between them.
-    size: (1, n, 1) or (n, 1) array of object sizes (widths).
-    Returns: (n_sample_min, n_objects, 2) array of (x, y) positions.
-    """
-    if size.ndim == 3:
-        size = size[0]  # Remove batch dimension if present
+# Suma de los tamaños debe ser menor que 1
+def sample_positions_align(size):
+    size = size[0]  
     n_objects = size.shape[0]
     widths = size.flatten()
-
-    # 1. Sample a random line: pick a random angle and a random point in [0,1]x[0,1]
+    # Random line
+    # Random angle
     theta = np.random.rand() * 2 * np.pi
     direction = np.array([np.cos(theta), np.sin(theta)])
-    center = np.random.rand(2)
+    # Center of [0,1]x[0,1] square
+    center = np.array([0.5,0.5])
 
-    # 2. Sample random gaps between objects
-    min_gap = 0.05
+    # Random gaps between objects
+    min_gap = 0.08
     gap1 = random.uniform(min_gap, widths.sum())
     while widths.sum() - gap1 < min_gap:
         gap1 = random.uniform(min_gap, widths.sum())
@@ -252,34 +392,19 @@ def sample_positions_align(size, n_sample_min=1, max_tries=10, n_samples_over=10
     gaps = np.array([gap1, gap2])
     total_gap = gaps.sum()
 
-    # 3. Compute total length needed for all objects (sum of widths + gaps)
     total_length = widths.sum() + total_gap
-    if total_length > 1.0:
-        scale = 1.0 / total_length
-        widths *= scale
-        gaps *= scale
-        total_length = 1.0
 
-    # 4. Compute start point of the line segment
-    start = center - direction * (total_length / 2)
-    # Shift so that all objects fit within [0,1]x[0,1]
-    min_shift = np.maximum(-start, 0)
-    max_shift = np.minimum(1 - (start + direction * total_length), 0)
-    shift = min_shift + (max_shift - min_shift) * np.random.rand()
-    start = start + shift
-
-    # 5. Compute positions along the line for each object
+    # Positions along the line
     positions = []
-    pos = start
+    pos = center
     for i, w in enumerate(widths):
         positions.append(pos + direction * (w / 2))
         if i < n_objects - 1:
             pos = pos + direction * (w + gaps[i])
     positions = np.stack(positions, axis=0)
 
-    # 6. Repeat for n_sample_min
     xy = positions[None, ...]
-    xy = np.repeat(xy, n_sample_min, axis=0)
+
     return xy
 
 
@@ -596,4 +721,3 @@ def save_image(images, base_path, task_name):
     #     images = (images*255).astype(np.uint8)
     img = Image.fromarray(images).convert('RGB')
     img.save(save_path)
-

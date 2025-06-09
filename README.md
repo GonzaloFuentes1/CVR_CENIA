@@ -10,7 +10,7 @@ This reposity details the Compositional Visual Relations (CVR) benchmark.
   - `fourier_terms`: número de términos de Fourier. Valor por defecto: 20.
 
 * `rigid_transform`: Transforma la figura en una figura rígida. Toma como argumentos
-  - `type`: tipo de transformación. Por ahora, puede ser `'polygon'` para generar polígonos regulares, `'irregular'` para generar polígonos irregulares, `arrow` para generar flechas (con área), y `arrow_line` para generar flechas sin área. Valor por defecto: `'polygon'`. 
+  - `type`: tipo de transformación. Por ahora, puede ser `'polygon'` para generar polígonos regulares, `'irregular'` para generar polígonos irregulares, `arrow` para generar flechas (con área). Valor por defecto: `'polygon'`. 
   - `points`: número de vértices para casos en que corresponde (`'polygon'` o `'irregular'`). Valor por defecto: 3.
   - `rotate`: flag que indica si se debe rotar la figura. En caso de ser `True`, la figura se rotará aleatoriamente, lo cual resulta útil para figuras como `'arrow'`, que se generan siempre idénticas. Valor por defecto: 0. 
 
