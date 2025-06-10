@@ -1313,7 +1313,6 @@ def task_svrt_19(
         return xy * scale + offset, size * scale
 
     # --- Clase 1 ---
-<<<<<<< Updated upstream
     # 1. Crea la figura base
     shape_pos_1 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
     scale_factor = np.random.uniform(0.6, 1.2)
@@ -1327,33 +1326,6 @@ def task_svrt_19(
         min_size=min_size,
         color=color,
         sizes=sizes
-=======
-    # 1. Crea las dos figuras idénticas
-    shape1 = create_shape(
-    shape_mode=shape_mode,
-    rigid_type=rigid_type,
-    radius=radius,
-    hole_radius=hole_radius,
-    n_sides=n_sides,
-    fourier_terms=fourier_terms,
-    symm_rotate=symm_rotate
-    )
-    shape2 = shape1.clone()
-
-    # 2. Define tamaños diferentes
-    size1 = np.random.uniform(min_size, max_size)
-    scale_factor = np.random.uniform(0.6, 1.2)
-    size2 = size1 * scale_factor
-    sizes = np.array([[size1], [size2]])  # shape (2,1)
-
-    # 3. Decora ambas juntas, pasando los tamaños
-    xy, size, shape_wrapped, colors = decorate_shapes(
-        [shape1, shape2],
-        max_size=max_size,
-        min_size=min_size,
-        color=color,
-        sizes=sizes  # ahora sí, ambos tamaños y SIN solapamiento
->>>>>>> Stashed changes
     )
     xy, size = normalize_scene(xy, size)
     sample_pos = (xy, size, shape_wrapped, colors)
