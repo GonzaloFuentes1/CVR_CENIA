@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 from PIL import Image
 from itertools import permutations
-
+from matplotlib.path import Path
 
 def cat_lists(lists):
     o = []
@@ -113,6 +113,49 @@ def sample_position_inside_many(s1, shapes, scales):
     samples = samples[res]
         
     return samples
+
+def sample_position_outside_1(s1, s2, scale):
+    """
+    Muestrea posibles posiciones absolutas del centro de s2 (escalado por 'scale')
+    para ubicarla completamente fuera del contorno de s1.
+    Devuelve un array (M,2) de coordenadas válidas.
+    """
+    # contornos
+    c1 = s1.get_contour()                 # (N,2) de la forma grande
+    c2 = s2.get_contour() * scale         # (N,2) de la forma chica escalada
+    bb_2 = c2.max(0) - c2.min(0)          # bbox de la forma chica
+
+    # generar candidatos en el bbox reducido de c1
+    range_   = (c1.max(0) - c1.min(0) - bb_2)
+    starting = (c1.min(0) + bb_2 / 2)
+    samples  = np.random.rand(100, 2) * range_[None, :] + starting[None, :]
+
+    # montar para el test de ray-casting
+    p1c     = np.concatenate([c1[:-1], c1[1:]], 1)[None, :, :]
+    samples = samples[:, None, :]  # (100,1,2)
+
+    # test "punto en polígono" igual que inside, pero invertido para outside
+    res = np.logical_and(
+        np.logical_or(
+            p1c[:, :, 0:1] < samples[:, :, 0:1],
+            p1c[:, :, 2:3] < samples[:, :, 0:1]
+        ),
+        np.logical_xor(
+            p1c[:, :, 1:2] <= samples[:, :, 1:2],
+            p1c[:, :, 3:4] <= samples[:, :, 1:2]
+        )
+    )[:, :, 0]
+    inside_mask = (res.sum(1) % 2 == 1)
+
+    # test de no colisión con el borde (igual que inside)
+    safe_mask = (np.abs(samples - c1) > bb_2[None, None, :] / 2).any(2).all(1)
+
+    # quedarnos sólo con los que NO están dentro y además no colisionan
+    outside_mask = np.logical_and(~inside_mask, safe_mask)
+
+    # devolver coordenadas (M,2) en sistema absoluto
+    return samples[outside_mask, 0]
+
 
 
 def sample_int_sum_n(n_numbers, s, min_v=0):
@@ -528,6 +571,39 @@ def sample_positions_circle(
 
     print("Advertencia: No se pudo encontrar disposición sin solapamiento tras varios intentos.")
     return xy
+
+def compute_inscribed_circle(shape, resolution=100):
+    """
+    Dado un Shape, calcula el mayor círculo inscrito en su contorno.
+    Parámetros:
+      shape      : objeto Shape con método get_contour() en [0,1]²
+      resolution : tamaño en píxeles del lienzo para rasterizar
+    Retorna:
+      center : np.array([cx, cy])  – centro normalizado en [0,1]²
+      radius : float               – radio normalizado en [0,1]
+    """
+    # 1) Crear lienzo vacío
+    img = np.zeros((resolution, resolution), dtype=np.uint8)
+
+    # 2) Obtener contorno en coordenadas normalizadas y escalar a píxeles
+    contour = shape.get_contour()                  # (N,2) en [0,1]
+    pts = np.round(contour * (resolution - 1))     # escalar
+    pts = pts.astype(np.int32).reshape(-1, 1, 2)   # formato OpenCV
+
+    # 3) Rellenar polígono
+    cv2.fillPoly(img, [pts], color=255)
+
+    # 4) Distance transform
+    dist = cv2.distanceTransform(img, cv2.DIST_L2, 5)
+
+    # 5) Buscar máximo: radio y posición
+    _, max_val, _, max_loc = cv2.minMaxLoc(dist)
+
+    # 6) Normalizar de vuelta a [0,1]
+    center = np.array([max_loc[0], max_loc[1]], dtype=float) / (resolution - 1)
+    radius = float(max_val) / (resolution - 1)
+
+    return center, radius
 
 
 def sample_random_colors(n_samples):

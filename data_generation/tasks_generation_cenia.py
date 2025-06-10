@@ -11,7 +11,10 @@ from data_generation.utils import (check_square, sample_contact_many,
                                    sample_positions_square,
                                    sample_random_colors,
                                    sample_positions_symmetric_pairs,
-                                   sample_positions_circle)
+                                   sample_positions_circle,
+                                   sample_position_inside_many,
+                                   sample_position_outside_1
+                                   )
 
 # ---------- Generador de figuras ----------
 
@@ -47,52 +50,77 @@ def create_shape(
 
 # ---------- Decorador de figuras ----------
 
-def decorate_shapes(shapes, max_size=0.4, min_size=None, size=None, rotate=False, color=False, flip=False, align=False, mirror=False, circle=False, middle=0):
+def decorate_shapes(
+    shapes,
+    max_size=0.4,
+    min_size=None,
+    size=None,         # Booleano legacy, True para aleatorio, False para fijo
+    sizes=None,        # Array explícito de tamaños, preferido para tareas modernas
+    rotate=False,
+    color=False,
+    flip=False,
+    align=False,
+    mirror=False,
+    circle=False,
+    inside=False,
+    middle=0
+):
     """
     Adorna N figuras con tamaño, posición (sin solapamiento), rotación, flip y color.
     Devuelve: (xy, size, shape_wrapped, colors)
     """
     n = len(shapes)
 
-    if size:
-        min_size = min_size or max_size / 2
-        size_vals = np.random.rand(n) * (max_size - min_size) + min_size
-        size = size_vals[:, None]  # shape (n, 1)
+    # --- Selección de tamaños robusta ---
+    if sizes is not None:
+        size = np.array(sizes)
+        if size.ndim == 1:
+            size = size[:, None]
     else:
-        size = np.full((n, 1), fill_value=max_size/2)
-    if middle == 1:
+        min_size = min_size or max_size / 2
+        if size is True:
+            # Compatibilidad: tamaño aleatorio por figura
+            size_vals = np.random.rand(n) * (max_size - min_size) + min_size
+            size = size_vals[:, None]
+        else:
+            # Todas las figuras mismo tamaño
+            size = np.full((n, 1), fill_value=max_size/2)
+
+    # Lógica especial para middle (usada en algunas tareas legacy)
+    if middle == 1 and n > 1:
         size[1] = max_size
-    if middle == 2:
+    elif middle == 2 and n > 2:
         k = np.random.rand()
         if k >= 0.5:
             size[0] = max_size
         else:
             size[2] = max_size
-    # Posiciones sin superposición usando bounding boxes
-    size_batch = size[None, ...]  # shape (1, n, 1)
-    if align:
-        sizes = size_batch[0]
-        if sizes.sum() >= 1:
-            size_batch *= (1 / (sizes.sum()*0.8))  # Normalizar para que sumen 1
-        xy_vals = sample_positions_align(size_batch)[0]  # shape (n, 2)
 
+    # --- Posicionamiento ---
+    size_batch = size[None, ...]  # shape (1, n, 1)
+
+    if align:
+        sizes_sum = size_batch[0].sum()
+        if sizes_sum >= 1:
+            size_batch *= (1 / (sizes_sum * 0.8))  # Normalizar para que sumen menos de 1
+        xy_vals = sample_positions_align(size_batch)[0]
     elif mirror:
         xy_vals = sample_positions_symmetric_pairs(size_batch[0])
-
     elif circle:
-        xy_vals = sample_positions_circle(size_batch[0])  # shape (n, 2)
-
+        xy_vals = sample_positions_circle(size_batch[0])
     else:
-        xy_vals = sample_positions_bb(size_batch)[0]  # shape (n, 2)
+        xy_vals = sample_positions_bb(size_batch)[0]
 
     xy = xy_vals[:, None, :]  # shape (n, 1, 2)
 
+    # --- Transformaciones geométricas ---
     for s in shapes:
         if rotate:
             s.rotate(np.random.rand() * 2 * np.pi)
         if flip and np.random.rand() > 0.5:
             s.flip()
 
+    # --- Colores ---
     if color:
         colors = sample_random_colors(n)
         colors = [colors[i:i+1] for i in range(n)]
@@ -102,6 +130,7 @@ def decorate_shapes(shapes, max_size=0.4, min_size=None, size=None, rotate=False
     shape_wrapped = [[s] for s in shapes]
 
     return xy, size, shape_wrapped, colors
+
 
 
 # ---------- Tarea SVRT 1: mismo tipo vs distinto tipo ----------
@@ -1269,18 +1298,30 @@ def task_svrt_19(
     - Clase 0: dos figuras diferentes.
     """
 
+    def normalize_scene(xy, size, margin=0.05):
+        bb_min = (xy - size / 2).min(axis=0)[0]
+        bb_max = (xy + size / 2).max(axis=0)[0]
+        scale = (1 - 2 * margin) / (bb_max - bb_min).max()
+        offset = (0.5 - (bb_min + bb_max) / 2 * scale)
+        return xy * scale + offset, size * scale
+
     # --- Clase 1 ---
+    # 1. Crea la figura base
     shape_pos_1 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
-    scale_factor = np.random.uniform(0.3, 1.5) # Valores arbitrarios
+    scale_factor = np.random.uniform(0.6, 1.2)
     shape_pos_2 = shape_pos_1.clone()
-    shape_pos_2.scale(scale_factor)
-    shapes_pos = [shape_pos_1, shape_pos_2]
-    sample_pos = decorate_shapes(
-        shapes_pos,
+    size1 = np.random.uniform(min_size, max_size)
+    size2 = size1 * scale_factor
+    sizes = np.array([[size1], [size2]])
+    xy, size, shape_wrapped, colors = decorate_shapes(
+        [shape_pos_1, shape_pos_2],
         max_size=max_size,
         min_size=min_size,
-        color=color
+        color=color,
+        sizes=sizes
     )
+    xy, size = normalize_scene(xy, size)
+    sample_pos = (xy, size, shape_wrapped, colors)
 
     # --- Clase 0 ---
     shape_neg_1 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
@@ -1292,7 +1333,6 @@ def task_svrt_19(
         min_size=min_size,
         color=color
     )
-
     return sample_neg, sample_pos
 
 
@@ -1452,10 +1492,99 @@ def task_svrt_23(
     rigid_type: str = 'polygon'
 ):
     """
-    SVRT #23 – Devuelve...
+    SVRT #23 – Devuelve:
+    - Clase 1: tres figuras, dos pequeñas y una grande, donde la figura grande contiene a una de las pequeñas, mientras que la otra está afuera.
+    - Clase 0: tres figuras, dos pequeñas y una grande, donde las dos pequeñas están afuera o dentro de la figura grande.
     """
-    sample_pos = False
-    sample_neg = False
+    # --- Clase 0 ---
+    max_size = 0.8
+    size_outer = max_size
+    size_inner = min_size * 0.4
+    sizes = np.array([[size_outer], [size_inner], [size_inner]], dtype=np.float32)
+    outer   = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    inner_1 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    inner_2 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    shapes_wrapped = [[outer], [inner_1], [inner_2]]
+
+    # Caso 1: Figuras dentro de la figura grande
+    if np.random.rand() < 0.5:
+        scales_rel = [size_inner/size_outer, size_inner/size_outer]
+        rels = sample_position_inside_many(outer, [inner_1, inner_2], scales_rel)
+        if len(rels) == 0:
+            raise RuntimeError("No se encontraron posiciones válidas para la clase positiva.")
+        rel = rels[np.random.randint(len(rels))]  # shape (2,2)
+        c = outer.get_contour()
+        cmin, cmax = c.min(0), c.max(0)
+        crange = cmax - cmin
+        rel_norm = (rel - cmin) / crange    # ahora en [0,1]×[0,1]
+        center = np.array([0.5, 0.5], dtype=np.float32)
+        xy_outer = center
+        offset = (rel_norm - 0.5) * size_outer
+        xy_i1 = center + offset[0]
+        xy_i2 = center + offset[1]
+        xy = np.stack([xy_outer, xy_i1, xy_i2])[:, None, :]  # (3,1,2)
+        
+        if color:
+            cols = sample_random_colors(3)
+            colors = [cols[i:i+1] for i in range(3)]
+        else:
+            colors = [np.zeros((1,3), dtype=np.float32) for _ in range(3)]
+        sample_neg = (xy, sizes, shapes_wrapped, colors)
+
+    # Caso 2: Figuras fuera de la figura grande
+    else:  
+        sample_neg = decorate_shapes(
+            [outer, inner_1, inner_2],
+            max_size=max_size,
+            min_size=min_size,
+            color=color,
+            sizes=sizes
+        )
+
+    # --- Clase 1 ---
+    max_size = 0.8
+    size_outer = max_size
+    size_inner = min_size * 0.4
+    sizes = np.array([[size_outer], [size_inner], [size_inner]], dtype=np.float32)
+    outer   = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    inner_1 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    inner_2 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    shapes_wrapped = [[outer], [inner_1], [inner_2]]
+    
+    # 1) sample inner_1 dentro
+    scale_rel  = size_inner / size_outer
+    cand_in    = sample_position_inside_1(outer, inner_1, scale_rel)
+    if cand_in.shape[0] == 0:
+        raise RuntimeError("No hay posición válida para inner_1 dentro de outer")
+    raw_in     = cand_in[np.random.randint(len(cand_in))]
+    c          = outer.get_contour()
+    cmin, cmax = c.min(0), c.max(0)
+    pos_norm   = (raw_in - cmin) / (cmax - cmin)
+    center     = np.array([0.5, 0.5], dtype=np.float32)
+    offset1    = (pos_norm - center) * size_outer
+    xy_i1      = center + offset1
+
+    # 2) sample inner_2 fuera
+    cand_out    = sample_position_outside_1(outer, inner_2, scale_rel)
+    if cand_out.shape[0] == 0:
+        raise RuntimeError("No hay posición válida para inner_2 fuera de outer")
+    raw_out     = cand_out[np.random.randint(len(cand_out))]
+    pos_norm2   = (raw_out - cmin) / (cmax - cmin)
+    offset2     = (pos_norm2 - center) * size_outer
+    xy_i2       = center + offset2
+
+    # 3) montamos el array xy y colores
+    xy_outer = center
+    xy       = np.stack([xy_outer, xy_i1, xy_i2])[:, None, :]  # (3,1,2)
+
+    if color:
+        cols   = sample_random_colors(3)
+        colors = [cols[i:i+1] for i in range(3)]
+    else:
+        colors = [np.zeros((1,3), dtype=np.float32) for _ in range(3)]
+
+    sample_pos = (xy, sizes, shapes_wrapped, colors)
+
     return sample_neg, sample_pos
 
 
