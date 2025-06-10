@@ -4,7 +4,7 @@ import os
 
 import numpy as np
 from PIL import Image
-
+from time import time
 from data_generation.tasks_generation_cenia import TASKS_SVRT
 from data_generation.utils import render_scene_safe
 
@@ -99,7 +99,7 @@ if __name__ == '__main__':
     logging.info(f'JOB PID {os.getpid()}')
 
     task_idx = args.task_idx
-
+    t1 = time()
     if task_idx == 0:
         # Generar dataset para todas las tareas
         for i in range(1, len(TASKS_IDX) + 1):
@@ -158,3 +158,5 @@ if __name__ == '__main__':
 
         generate_dataset(task_name, task_fn, args.data_dir, args.image_size,
                          args.seed, args.train_size, args.val_size, args.test_size)
+    t2 = time()
+    print(f'Finished in {t2 - t1:.2f} seconds')

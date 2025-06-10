@@ -179,29 +179,23 @@ def task_svrt_2(
     color: bool = False,
     rotate: bool = False,
     flip: bool = False,
-    min_center_dist: float = 0.05,      # distancia mínima entre centros
-    edge_gap: float = 0.001,          # “aire” máximo entre inner y borde interior
-    max_local_tries: int = 300,
-    max_global_tries: int = 1_000,
+    min_center_dist: float = 0.05,
+    edge_gap: float = 0.01,
+    max_global_tries: int = 2000
 ):
     """
     sample_pos : inner centrado y estrictamente contenido   (clase 1)
     sample_neg : inner desplazada y pegada al borde interior (clase 0)
-
-    * min_center_dist  → distancia mínima d ≥ min_center_dist
-    * edge_gap         → hueco máximo g ≤ edge_gap entre contornos
     """
 
     for _ in range(max_global_tries):
 
-        # nueva pareja de figuras
-        outer = create_shape(shape_mode, rigid_type, radius,
-                             hole_radius, n_sides, fourier_terms)
-        outer.scale(max_size)
+        # Crear figuras base
+        outer = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms)
+        inner = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms)
 
-        inner = create_shape(shape_mode, rigid_type, radius,
-                             hole_radius, n_sides, fourier_terms)
-        inner.scale(min_size)
+        outer.scale(max_size)
+        inner.scale(min_size* max_size)
 
         _, _, _, col = decorate_shapes(
             [outer, inner],
@@ -211,49 +205,48 @@ def task_svrt_2(
             color=color,
         )
         colors_pair = col if color else [np.zeros((1, 3), dtype=np.float32)] * 2
-        size_pair   = np.array([[1.0], [1.0]])
+        size_pair = np.array([[1.0], [1.0]])
 
-        # coloca outer en el lienzo
-        xy_outer = np.random.rand(2)
-        cont_out = outer.get_contour() + xy_outer
-        if not ((cont_out >= 0).all() & (cont_out <= 1).all()):
-            continue
+        # --- Intentar ubicar outer centrado dentro del canvas ---
+        for _outer_try in range(30):
+            xy_outer = np.random.uniform(0.1, 0.9, size=2)
+            cont_out = outer.get_contour() + xy_outer
+            if (cont_out >= 0).all() and (cont_out <= 1).all():
+                break
+        else:
+            continue  # no se pudo ubicar outer dentro del canvas
 
-        # positivo: inner centrada
+        # --- sample_pos ---
         xy_inner_pos = xy_outer
-        cont_in_pos  = inner.get_contour() + xy_inner_pos
-        if not ((cont_in_pos >= 0).all() & (cont_in_pos <= 1).all()):
+        cont_in_pos = inner.get_contour() + xy_inner_pos
+        if not ((cont_in_pos >= 0).all() and (cont_in_pos <= 1).all()):
             continue
         if not Polygon(cont_out).contains_properly(Polygon(cont_in_pos)):
             continue
 
-        # negativo: inner muy cerca del borde
+        # --- sample_neg ---
         r_out_min = np.min(np.linalg.norm(outer.get_contour(), axis=1))
-        r_in_max  = np.max(np.linalg.norm(inner.get_contour(), axis=1))
-        available = r_out_min - r_in_max                    # distancia límite
+        r_in_max = np.max(np.linalg.norm(inner.get_contour(), axis=1))
+        available = r_out_min - r_in_max
 
-        # rango válido para la distancia entre centros
-        d_low  = max(min_center_dist, available - edge_gap)  # pegar al borde
-        d_high = available - 1e-6                            # sin tocar
-
-        if d_high <= d_low:          # no cabe la condición
+        d_low = max(min_center_dist, available - edge_gap)
+        d_high = available - 1e-6
+        if d_high <= d_low:
             continue
 
-        success_neg = False
-        for _neg in range(max_local_tries):
-            u = np.random.rand(2) - 0.5
-            u /= np.linalg.norm(u) + 1e-9
-            d = np.random.uniform(d_low, d_high)
-            xy_inner_neg = xy_outer + u * d
-            cont_in_neg = inner.get_contour() + xy_inner_neg
-            if ((cont_in_neg >= 0).all() & (cont_in_neg <= 1).all() &
-                Polygon(cont_out).contains_properly(Polygon(cont_in_neg))):
-                success_neg = True
-                break
-        if not success_neg:
+        # Proyección radial única
+        u = np.random.randn(2)
+        u /= np.linalg.norm(u) + 1e-9
+        d = np.random.uniform(d_low, d_high)
+        xy_inner_neg = xy_outer + u * d
+        cont_in_neg = inner.get_contour() + xy_inner_neg
+
+        if not ((cont_in_neg >= 0).all() and (cont_in_neg <= 1).all()):
+            continue
+        if not Polygon(cont_out).contains_properly(Polygon(cont_in_neg)):
             continue
 
-        # empaquetado
+        # Empaquetado
         xy_pos = np.stack([xy_outer, xy_inner_pos])[:, None, :]
         xy_neg = np.stack([xy_outer, xy_inner_neg])[:, None, :]
 
@@ -265,6 +258,7 @@ def task_svrt_2(
         return sample_neg, sample_pos
 
     raise RuntimeError("task_svrt_2: no se pudo generar datos válidos")
+
 
 # ---------- Tarea SVRT 3 ----------
 
@@ -356,7 +350,7 @@ def task_svrt_4(
     min_size: float = 0.2,
     color: bool = False,
     rigid_type: str = 'polygon',
-    max_tries: int = 1000,
+    max_tries: int = 3000,
 ):
     """
     SVRT #4 – Devuelve (sample_neg, sample_pos).
@@ -613,7 +607,7 @@ def task_svrt_8(
     contour_outer = outer.get_contour() * size_outer + xy_outer
     contour_inner = inner.get_contour() * size_inner
 
-    max_attempts = 10
+    max_attempts = 100
 
     done_flag = False
     for _ in range(max_attempts):
