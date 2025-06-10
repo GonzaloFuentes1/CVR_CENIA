@@ -181,7 +181,7 @@ def task_svrt_2(
     flip: bool = False,
     min_center_dist: float = 0.05,
     edge_gap: float = 0.01,
-    max_global_tries: int = 2000
+    max_global_tries: int = 10000
 ):
     """
     sample_pos : inner centrado y estrictamente contenido   (clase 1)
@@ -350,7 +350,7 @@ def task_svrt_4(
     min_size: float = 0.2,
     color: bool = False,
     rigid_type: str = 'polygon',
-    max_tries: int = 3000,
+    max_tries: int = 10000,
 ):
     """
     SVRT #4 – Devuelve (sample_neg, sample_pos).
@@ -360,7 +360,7 @@ def task_svrt_4(
     if min_size is None:
         raise ValueError("min_size debe estar definido.")
 
-    border_margin = 0.01
+    border_margin = 0.001
     size_outer = max_size
     size_inner = min_size * size_outer
 
@@ -607,11 +607,13 @@ def task_svrt_8(
     contour_outer = outer.get_contour() * size_outer + xy_outer
     contour_inner = inner.get_contour() * size_inner
 
-    max_attempts = 100
+    max_attempts = 1000
 
     done_flag = False
     for _ in range(max_attempts):
         xy_inner_rel = sample_position_inside_1(outer, inner, scale=size_inner / size_outer)
+        contour_outer = outer.get_contour() * size_outer + xy_outer
+        contour_inner = inner.get_contour() * size_inner
         if len(xy_inner_rel) > 0:
             for pos in xy_inner_rel:
                 xy_inner = pos * size_outer + xy_outer
@@ -653,13 +655,12 @@ def task_svrt_8(
         # posición global del centro del outer
         xy_outer = np.random.rand(2) * (1 - size_outer) + size_outer / 2
 
-        contour_outer = outer.get_contour()*size_outer + xy_outer
-        contour_inner = inner.get_contour()*size_inner
-
-        max_attempts = 10
+        max_attempts = 1000
         done_flag = False
         for _ in range(max_attempts):
             xy_inner_rel = sample_position_inside_1(outer, inner, scale=size_inner / size_outer)
+            contour_outer = outer.get_contour()*size_outer + xy_outer
+            contour_inner = inner.get_contour()*size_inner
             if len(xy_inner_rel) > 0:
                 for pos in xy_inner_rel:
                     xy_inner = pos * size_outer + xy_outer
