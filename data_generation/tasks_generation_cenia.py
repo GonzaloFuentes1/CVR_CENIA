@@ -1297,6 +1297,13 @@ def task_svrt_19(
     - Clase 1: dos figuras iguales, solo que una está escalada.
     - Clase 0: dos figuras diferentes.
     """
+    def normalize_scene(xy, size, margin=0.05):
+        # xy: (n, 1, 2), size: (n, 1)
+        bb_min = (xy - size[..., None] / 2).min(axis=(0, 1))
+        bb_max = (xy + size[..., None] / 2).max(axis=(0, 1))
+        scale = (1 - 2 * margin) / (bb_max - bb_min).max()
+        offset = 0.5 - ((bb_min + bb_max) / 2) * scale
+        return xy * scale + offset, size * scale
 
     def normalize_scene(xy, size, margin=0.05):
         bb_min = (xy - size / 2).min(axis=0)[0]
@@ -1306,6 +1313,7 @@ def task_svrt_19(
         return xy * scale + offset, size * scale
 
     # --- Clase 1 ---
+<<<<<<< Updated upstream
     # 1. Crea la figura base
     shape_pos_1 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
     scale_factor = np.random.uniform(0.6, 1.2)
@@ -1319,9 +1327,43 @@ def task_svrt_19(
         min_size=min_size,
         color=color,
         sizes=sizes
+=======
+    # 1. Crea las dos figuras idénticas
+    shape1 = create_shape(
+    shape_mode=shape_mode,
+    rigid_type=rigid_type,
+    radius=radius,
+    hole_radius=hole_radius,
+    n_sides=n_sides,
+    fourier_terms=fourier_terms,
+    symm_rotate=symm_rotate
+    )
+    shape2 = shape1.clone()
+
+    # 2. Define tamaños diferentes
+    size1 = np.random.uniform(min_size, max_size)
+    scale_factor = np.random.uniform(0.6, 1.2)
+    size2 = size1 * scale_factor
+    sizes = np.array([[size1], [size2]])  # shape (2,1)
+
+    # 3. Decora ambas juntas, pasando los tamaños
+    xy, size, shape_wrapped, colors = decorate_shapes(
+        [shape1, shape2],
+        max_size=max_size,
+        min_size=min_size,
+        color=color,
+        sizes=sizes  # ahora sí, ambos tamaños y SIN solapamiento
+>>>>>>> Stashed changes
     )
     xy, size = normalize_scene(xy, size)
     sample_pos = (xy, size, shape_wrapped, colors)
+
+    # 4. Normaliza la escena (opcional pero recomendado)
+    xy, size = normalize_scene(xy, size)
+
+    # 5. Empaqueta para SVRT
+    sample_pos = (xy, size, shape_wrapped, colors)
+
 
     # --- Clase 0 ---
     shape_neg_1 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
