@@ -249,31 +249,30 @@ def sample_positions_square(size):
                       [ 0.5,  0.5],
                       [-0.5,  0.5]])
 
-    # Scale
-    max_size = size.max() * np.sqrt(2)  
-    scale = np.random.uniform(max_size, 1 - max_size)
-    square *= scale
-
     # Rotate randomly
     angle = np.random.rand() * 2 * np.pi
     rotation_matrix = np.array([[np.cos(angle), -np.sin(angle)],
                                  [np.sin(angle),  np.cos(angle)]])
     square_rotated = square @ rotation_matrix
 
-    # Calculate bounding box
+    # Scale
+    slack = 0.02
+    max_size = size.max() * np.sqrt(2)     
     max_coord = (square_rotated + max_size / 2).max(axis=0)
     min_coord = (square_rotated - max_size / 2).min(axis=0)
-    w = max_coord[0] - min_coord[0] + max_size
+
+    scale_max = (1 - max_size)/(max_coord[0] - min_coord[0])
+    scale = np.random.uniform(max_size + slack, scale_max - slack)
+    square_rotated *= scale 
+    max_coord = (square_rotated + max_size / 2).max(axis=0)
+    min_coord = (square_rotated - max_size / 2).min(axis=0)
+    w = max_coord[0] - min_coord[0] 
     if w > 1:
-        scale_max = 1/w
-        scale = np.random.uniform(max_size, scale_max)
-        square_rotated *= scale 
-        max_coord = (square_rotated + max_size / 2).max(axis=0)
-        min_coord = (square_rotated - max_size / 2).min(axis=0)
-        w = max_coord[0] - min_coord[0] + max_size   
+        print("w > 1")
+        print(w)
 
     # Locate square
-    position = np.random.uniform(w*0.5, 1 - w*0.5, 2)
+    position = np.random.uniform(w*0.5 + slack, 1 - w*0.5 - slack, 2)
     square_rotated += position 
 
     xy = square_rotated
@@ -339,10 +338,14 @@ def sample_positions_equidist(size, max_attempts=100, max_inner_attempts=50):
         p3_inner = False
         for _ in range(max_inner_attempts):
             p3 = np.random.uniform(size[2]/2, 1 - size[2]/2, 2)
-            if (p1[0] - size[0]/2 <= p3[0] <= p1[0] + size[0]/2 and
-                p1[1] - size[0]/2 <= p3[1] <= p1[1] + size[0]/2) or (
-                p2[0] - size[1]/2 <= p3[0] <= p2[0] + size[1]/2 and
-                p2[1] - size[1]/2 <= p3[1] <= p2[1] + size[1]/2):
+            if (p1[0] - size[0]/2 <= p3[0] + size[2]/2 and
+                p1[0] + size[0]/2 >= p3[0] - size[2]/2 and
+                p1[1] - size[0]/2 <= p3[1] + size[2]/2 and
+                p1[1] + size[0]/2 >= p3[1] - size[2]/2) or (
+                p2[0] - size[1]/2 <= p3[0] + size[2]/2 and
+                p2[0] + size[1]/2 >= p3[0] - size[2]/2 and
+                p2[1] - size[1]/2 <= p3[1] + size[2]/2 and
+                p2[1] + size[1]/2 >= p3[1] - size[2]/2):
                 continue
             else:
                 p3_inner = True
