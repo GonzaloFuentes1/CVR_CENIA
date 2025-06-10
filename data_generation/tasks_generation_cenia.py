@@ -1306,8 +1306,6 @@ def task_svrt_19(
     sizes = np.array([[size1], [size2]])   
     shape_pos_2 = shape_pos_1.clone()
     shapes_pos = [shape_pos_1, shape_pos_2]
-
-
     sample_pos = decorate_shapes(
         shapes_pos,
         max_size=max_size,
