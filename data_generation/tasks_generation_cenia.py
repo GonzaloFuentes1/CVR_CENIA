@@ -1,6 +1,6 @@
 import numpy as np
 from matplotlib.path import Path
-from shapely import Polygon
+from shapely import Polygon, box
 
 from data_generation.shape import Shape
 
@@ -168,76 +168,103 @@ def task_svrt_1(
 # ---------- Tarea SVRT 2 ----------
 
 def task_svrt_2(
-    shape_mode: str = 'normal',
+    shape_mode: str = "normal",
     radius: float = 0.5,
     hole_radius: float = 0.05,
     n_sides: int = 5,
     fourier_terms: int = 20,
-    symm_rotate: bool = True,
-    poly_min_sides: int = 3,
-    poly_max_sides: int = 10,
+    rigid_type: str = "polygon",
     max_size: float = 0.9,
     min_size: float = 0.2,
     color: bool = False,
-    rigid_type: str = 'polygon',
-    max_tries: int = 30
+    rotate: bool = False,
+    flip: bool = False,
+    min_center_dist: float = 0.05,      # distancia mínima entre centros
+    edge_gap: float = 0.001,          # “aire” máximo entre inner y borde interior
+    max_local_tries: int = 300,
+    max_global_tries: int = 1_000,
 ):
     """
-    SVRT #2 – Devuelve (sample_neg, sample_pos).
-    sample_pos: inner centrado dentro del outer (clase 1)
-    sample_neg: inner desplazado hacia el borde (clase 0)
+    sample_pos : inner centrado y estrictamente contenido   (clase 1)
+    sample_neg : inner desplazada y pegada al borde interior (clase 0)
+
+    * min_center_dist  → distancia mínima d ≥ min_center_dist
+    * edge_gap         → hueco máximo g ≤ edge_gap entre contornos
     """
-    if min_size is None:
-        raise ValueError("min_size debe estar definido.")
 
-    size_outer = max_size
-    size_inner = min_size * size_outer
+    for _ in range(max_global_tries):
 
-    # === Crear shapes ===
-    outer = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms)
-    inner = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms)
-    outer.scale(size_outer)
-    inner.scale(size_inner)
+        # nueva pareja de figuras
+        outer = create_shape(shape_mode, rigid_type, radius,
+                             hole_radius, n_sides, fourier_terms)
+        outer.scale(max_size)
 
-    # === Clase Positiva: centrado ===
-    for _ in range(max_tries):
-        xy_outer = np.random.rand(2) * (1 - size_outer) + size_outer / 2
-        # Centro del inner coincide con centro del outer
-        xy_inner = xy_outer
-        contour_inner = inner.get_contour() + xy_inner
-        if ((0 <= contour_inner).all() and (contour_inner <= 1).all()):
-            break
-    else:
-        raise RuntimeError("No se pudo generar clase positiva centrada.")
+        inner = create_shape(shape_mode, rigid_type, radius,
+                             hole_radius, n_sides, fourier_terms)
+        inner.scale(min_size)
 
-    xy_pos = np.stack([xy_outer, xy_inner])[:, None, :]
-    size_pos = np.array([[1.0], [1.0]])
-    shapes_pos = [[outer], [inner]]
-    color_pos = sample_random_colors(2) if color else [np.zeros((1, 3), dtype=np.float32)] * 2
-    sample_pos = (xy_pos, size_pos, shapes_pos, color_pos)
+        _, _, _, col = decorate_shapes(
+            [outer, inner],
+            sizes=[[1.0], [1.0]],
+            rotate=rotate,
+            flip=flip,
+            color=color,
+        )
+        colors_pair = col if color else [np.zeros((1, 3), dtype=np.float32)] * 2
+        size_pair   = np.array([[1.0], [1.0]])
 
-    # === Clase Negativa: desplazado cerca del borde ===
-    for _ in range(max_tries):
-        xy_outer = np.random.rand(2) * (1 - size_outer) + size_outer / 2
-        # Samplear posición alejada del centro
-        rel_offset = np.random.rand(2) - 0.5
-        rel_offset /= np.linalg.norm(rel_offset) + 1e-6
-        offset = rel_offset * (size_outer / 2 - size_inner / 1.1)
-        xy_inner = xy_outer + offset
-        contour_inner = inner.get_contour() + xy_inner
-        if ((0 <= contour_inner).all() and (contour_inner <= 1).all()):
-            break
-    else:
-        raise RuntimeError("No se pudo generar clase negativa desplazada.")
+        # coloca outer en el lienzo
+        xy_outer = np.random.rand(2)
+        cont_out = outer.get_contour() + xy_outer
+        if not ((cont_out >= 0).all() & (cont_out <= 1).all()):
+            continue
 
-    xy_neg = np.stack([xy_outer, xy_inner])[:, None, :]
-    size_neg = np.array([[1.0], [1.0]])
-    shapes_neg = [[outer.clone()], [inner.clone()]]
-    color_neg = sample_random_colors(2) if color else [np.zeros((1, 3), dtype=np.float32)] * 2
-    sample_neg = (xy_neg, size_neg, shapes_neg, color_neg)
+        # positivo: inner centrada
+        xy_inner_pos = xy_outer
+        cont_in_pos  = inner.get_contour() + xy_inner_pos
+        if not ((cont_in_pos >= 0).all() & (cont_in_pos <= 1).all()):
+            continue
+        if not Polygon(cont_out).contains_properly(Polygon(cont_in_pos)):
+            continue
 
-    return sample_neg, sample_pos
+        # negativo: inner muy cerca del borde
+        r_out_min = np.min(np.linalg.norm(outer.get_contour(), axis=1))
+        r_in_max  = np.max(np.linalg.norm(inner.get_contour(), axis=1))
+        available = r_out_min - r_in_max                    # distancia límite
 
+        # rango válido para la distancia entre centros
+        d_low  = max(min_center_dist, available - edge_gap)  # pegar al borde
+        d_high = available - 1e-6                            # sin tocar
+
+        if d_high <= d_low:          # no cabe la condición
+            continue
+
+        success_neg = False
+        for _neg in range(max_local_tries):
+            u = np.random.rand(2) - 0.5
+            u /= np.linalg.norm(u) + 1e-9
+            d = np.random.uniform(d_low, d_high)
+            xy_inner_neg = xy_outer + u * d
+            cont_in_neg = inner.get_contour() + xy_inner_neg
+            if ((cont_in_neg >= 0).all() & (cont_in_neg <= 1).all() &
+                Polygon(cont_out).contains_properly(Polygon(cont_in_neg))):
+                success_neg = True
+                break
+        if not success_neg:
+            continue
+
+        # empaquetado
+        xy_pos = np.stack([xy_outer, xy_inner_pos])[:, None, :]
+        xy_neg = np.stack([xy_outer, xy_inner_neg])[:, None, :]
+
+        shapes_pos = [[outer], [inner]]
+        shapes_neg = [[outer.clone()], [inner.clone()]]
+
+        sample_pos = (xy_pos, size_pair, shapes_pos, colors_pair)
+        sample_neg = (xy_neg, size_pair, shapes_neg, colors_pair)
+        return sample_neg, sample_pos
+
+    raise RuntimeError("task_svrt_2: no se pudo generar datos válidos")
 
 # ---------- Tarea SVRT 3 ----------
 
@@ -908,123 +935,94 @@ def task_svrt_12(
 # ---------- Tarea SVRT 13 ----------
 
 def task_svrt_13(
-    shape_mode: str = 'normal',
+    shape_mode: str = "normal",
     radius: float = 0.5,
     hole_radius: float = 0.05,
     n_sides: int = 5,
     fourier_terms: int = 20,
     symm_rotate: bool = True,
-    poly_min_sides: int = 3,
-    poly_max_sides: int = 10,
-    max_size: float = 0.4,
-    min_size: float | None = 0.2,
-    delta_min: float = 0.01,
-    delta_max: float = 0.3,
+    max_size: float = 0.25,
+    min_size: float = 0.12,
     color: bool = False,
-    rigid_type: str = 'polygon',
-    max_tries: int = 30,
+    rotate: bool = False,
+    flip: bool = False,
+    rigid_type: str = "polygon",
+    max_tries: int = 300,
 ):
-    def center_scene_without_scaling(xy, size):
-        bb_min = (xy - size[..., None] / 2).min(axis=(0, 1))
-        bb_max = (xy + size[..., None] / 2).max(axis=(0, 1))
-        bb_center = (bb_min + bb_max) / 2
-        canvas_center = np.array([0.5, 0.5])
-        delta = canvas_center - bb_center
-        return xy + delta
+    canvas_box = box(0, 0, 1, 1)
 
-    if min_size is None:
-        raise ValueError("min_size debe estar definido.")
+    def to_polygons(shapes, xy, size):
+        polys = []
+        for i, shape in enumerate(shapes):
+            scaled = shape.clone()
+            scaled.scale(size[i][0])
+            coords = scaled.get_contour() + xy[i, 0]
+            poly = Polygon(coords)
+            polys.append(poly)
+        return polys
 
-    # === 1. Crear una figura grande y una figura chica ===
-    shape_big = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
-    shape_big.scale(max_size)
-
-    shape_small = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
-    shape_small.scale(min_size)
-
-    # === 2. Ubicar las dos figuras grandes sin solaparse ===
+    def valid_scene(polys):
+        for poly in polys:
+            if not poly.within(canvas_box):
+                return False
+        for i in range(len(polys)):
+            for j in range(i + 1, len(polys)):
+                if polys[i].intersects(polys[j]):
+                    return False
+        return True
     for _ in range(max_tries):
-        xy_big, _, _, _ = decorate_shapes(
-            [shape_big, shape_big],
-            max_size=max_size,
-            min_size=min_size,
-            size=False,
-            rotate=False,
-            flip=False,
-            color=False,
-            align=True
-        )
-        dist = np.linalg.norm(xy_big[0, 0] - xy_big[1, 0])
-        if dist > max_size:
+        big = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        small = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+
+        bigs = [big.clone(), big.clone()]
+        smalls = [small.clone(), small.clone()]
+        all_shapes = bigs + smalls
+
+        sizes = np.array([[max_size]] * 2 + [[min_size]] * 2)
+        xy = sample_positions_bb(sizes[None, ...])[0]
+
+        delta = xy[2] - xy[0]
+        xy[3] = xy[1] + delta
+        xy_pos = xy[:, None, :]
+
+        polys = to_polygons(all_shapes, xy_pos, sizes)
+        if valid_scene(polys):
+            shapes_wrapped_pos = [[s] for s in all_shapes]
+            colors_pos = sample_random_colors(4) if color else [np.zeros((1, 3), dtype=np.float32)] * 4
+            sample_pos = (xy_pos, sizes, shapes_wrapped_pos, colors_pos)
             break
     else:
-        raise RuntimeError("No se pudo ubicar figuras grandes sin solapamiento.")
+        raise RuntimeError("task_svrt_13: no se pudo generar ejemplo positivo válido")
 
-    pos_big1 = xy_big[0, 0]
-    pos_big2 = xy_big[1, 0]
-
-    # === 3. Clase POSITIVA ===
     for _ in range(max_tries):
-        delta = np.random.uniform(delta_min, delta_max, size=2)
-        pos_small1 = pos_big1 + delta
-        pos_small2 = pos_big2 + delta
+        big = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        small = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
 
-        dist_11 = np.linalg.norm(pos_small1 - pos_big1)
-        dist_22 = np.linalg.norm(pos_small2 - pos_big2)
-        dist_12 = np.linalg.norm(pos_small1 - pos_small2)
+        bigs = [big.clone(), big.clone()]
+        smalls = [small.clone(), small.clone()]
+        all_shapes = bigs + smalls
 
-        if dist_11 > (max_size + min_size) / 2 and dist_22 > (max_size + min_size) / 2 and dist_12 > min_size:
-            break
+        sizes = np.array([[max_size]] * 2 + [[min_size]] * 2)
+
+        # Posiciones totalmente aleatorias con separación mínima implícita por sample_positions_bb
+        xy = sample_positions_bb(sizes[None, ...])[0]
+        xy_neg = xy[:, None, :]
+
+        polys = to_polygons(all_shapes, xy_neg, sizes)
+        if not valid_scene(polys):
+            continue
+
+        v1 = xy[2] - xy[0]
+        v2 = xy[3] - xy[1]
+        if np.linalg.norm(v1 - v2) < 0.05:
+            continue
+
+        shapes_wrapped_neg = [[s] for s in all_shapes]
+        colors_neg = sample_random_colors(4) if color else [np.zeros((1, 3), dtype=np.float32)] * 4
+        sample_neg = (xy_neg, sizes, shapes_wrapped_neg, colors_neg)
+        break
     else:
-        raise RuntimeError("No se pudo ubicar las figuras chicas sin solapamiento (positiva).")
-
-    xy_pos = np.stack([pos_big1, pos_small1, pos_big2, pos_small2])[:, None, :]
-    xy_pos = center_scene_without_scaling(xy_pos, np.ones((4, 1)))
-    size_pos = np.ones((4, 1))
-    shapes_pos = [[shape_big], [shape_small], [shape_big], [shape_small]]
-
-    if color:
-        color_pos = sample_random_colors(4)
-        color_pos = [color_pos[i:i+1] for i in range(4)]
-    else:
-        color_pos = [np.zeros((1, 3), dtype=np.float32) for _ in range(4)]
-
-    sample_pos = (xy_pos, size_pos, shapes_pos, color_pos)
-
-    # === 4. Clase NEGATIVA: delta + ruido angular ===
-    for _ in range(max_tries):
-        delta_base = np.random.uniform(delta_min, delta_max, size=2)
-        angle = np.random.uniform(0, 2 * np.pi)
-        r = np.random.uniform(0, delta_max)
-        noise = r * np.array([np.cos(angle), np.sin(angle)])
-
-        delta1 = delta_base
-        delta2 = delta_base + noise
-
-        pos_small1 = pos_big1 + delta1
-        pos_small2 = pos_big2 + delta2
-
-        d11 = np.linalg.norm(pos_small1 - pos_big1)
-        d22 = np.linalg.norm(pos_small2 - pos_big2)
-        d12 = np.linalg.norm(pos_small1 - pos_small2)
-
-        if d11 > (max_size + min_size) / 2 and d22 > (max_size + min_size) / 2 and d12 > min_size:
-            break
-    else:
-        raise RuntimeError("No se pudo ubicar composiciones negativas válidas.")
-
-    xy_neg = np.stack([pos_big1, pos_small1, pos_big2, pos_small2])[:, None, :]
-    xy_neg = center_scene_without_scaling(xy_neg, np.ones((4, 1)))
-    size_neg = np.ones((4, 1))
-    shapes_neg = [[shape_big], [shape_small], [shape_big], [shape_small]]
-
-    if color:
-        color_neg = sample_random_colors(4)
-        color_neg = [color_neg[i:i+1] for i in range(4)]
-    else:
-        color_neg = [np.zeros((1, 3), dtype=np.float32) for _ in range(4)]
-
-    sample_neg = (xy_neg, size_neg, shapes_neg, color_neg)
+        raise RuntimeError("task_svrt_13: no se pudo generar ejemplo negativo válido")
 
     return sample_neg, sample_pos
 
@@ -1619,12 +1617,9 @@ def task_SD(
     color: bool = False,
     rigid_type: str = 'polygon'
 ):
-    """
-    SD – Devuelve...
-    """
-    sample_pos = False
-    sample_neg = False
-    return sample_neg, sample_pos
+
+    return task_svrt_1(shape_mode, radius, hole_radius, n_sides, fourier_terms, symm_rotate,
+                       poly_min_sides, poly_max_sides, max_size, min_size, color, rigid_type)
 
 
 # ---------- Tarea SOSD ----------
@@ -1635,20 +1630,72 @@ def task_SOSD(
     hole_radius: float = 0.05,
     n_sides: int = 5,
     fourier_terms: int = 20,
-    symm_rotate: bool = True,
+    symm_rotate: bool = False,
     poly_min_sides: int = 3,
     poly_max_sides: int = 10,
-    max_size: float = 0.4,
-    min_size: float | None = 0.2,
+    max_size: float = 0.3,
+    min_size: float | None = 0.15,
     color: bool = False,
+    rotate: bool = False,
+    flip: bool = False,
     rigid_type: str = 'polygon'
 ):
     """
-    SOSD – Devuelve...
+    SOSD – Second-order same-different:
+    sample_pos: A==B y C==D  ó  A!=B y C!=D  → clase 1
+    sample_neg: A==B y C!=D  ó  A!=B y C==D  → clase 0
     """
-    sample_pos = False
-    sample_neg = False
+
+    def apply_decorator_with_quadrants(shapes):
+        # Aplica el decorador completo (tamaño, color, rotación, flip)
+        xy, sizes, shapes_wrapped, colors = decorate_shapes(
+            shapes,
+            sizes=[[max_size]] * 4,
+            rotate=rotate,
+            flip=flip,
+            color=color,
+            align=False
+        )
+        # Reemplaza posiciones por cuadrantes fijos
+        fixed_xy = np.array([
+            [0.25, 0.75],  # A
+            [0.75, 0.75],  # B
+            [0.25, 0.25],  # C
+            [0.75, 0.25],  # D
+        ])[:, None, :]
+        return fixed_xy, sizes, shapes_wrapped, colors
+
+    # --- sample_pos ---
+    if np.random.rand() < 0.5:
+        # A == B, C == D → usar solo 2 shapes
+        shape_ab = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shape_cd = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shapes_pos = [shape_ab.clone(), shape_ab.clone(), shape_cd.clone(), shape_cd.clone()]
+    else:
+        # A != B, C != D → 4 shapes distintas
+        shapes_pos = [create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+                      for _ in range(4)]
+
+    sample_pos = apply_decorator_with_quadrants(shapes_pos)
+
+    # --- sample_neg ---
+    if np.random.rand() < 0.5:
+        # A == B, C != D
+        shape_ab = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shape_c = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shape_d = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shapes_neg = [shape_ab.clone(), shape_ab.clone(), shape_c, shape_d]
+    else:
+        # A != B, C == D
+        shape_a = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shape_b = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shape_cd = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shapes_neg = [shape_a, shape_b, shape_cd.clone(), shape_cd.clone()]
+
+    sample_neg = apply_decorator_with_quadrants(shapes_neg)
+
     return sample_neg, sample_pos
+
 
 
 # ---------- Tarea RMTS ----------
