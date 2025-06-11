@@ -1583,6 +1583,7 @@ def task_MTS(
     symm_rotate: bool = True,
     poly_min_sides: int = 3,
     poly_max_sides: int = 10,
+    # max_size <= 0.5
     max_size: float = 0.4,
     min_size: float | None = 0.2,
     color: bool = False,
@@ -1591,8 +1592,38 @@ def task_MTS(
     """
     MTS – Devuelve...
     """
-    sample_pos = False
-    sample_neg = False
+    # Centro de la figura superior es (0.5, 0.75)
+    # Centro de la figura inferior izquierda es (0.25, 0.75)
+    # Centro de la figura inferior derecha es (0.75, 0.75)
+    # Considerando esto, debemos tener max_size <= 0.5. (Se divide por 2 en el decorate shapes por lo que max_size <= 1)
+    shape1 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    shape2 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    shape3 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    shape4 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    if max_size > 1: 
+        raise ValueError("max_size debe ser <= 1 para que las figuras encajen en el espacio definido.")
+    # --------- Categoria 1 --------- 
+    xy_pos, size_pos, shapes_pos, color_pos = decorate_shapes(
+        [shape1.clone(), shape2.clone(), shape1.clone()],
+        max_size=max_size, min_size=min_size, color=color
+    )
+    # Ajustamos las posiciones
+    xy_pos[0] = np.array([[0.5, 0.25]], dtype=np.float32)  # Figura superior
+    xy_pos[1] = np.array([[0.25, 0.75]], dtype=np.float32)  # Figura inferior izquierda
+    xy_pos[2] = np.array([[0.75, 0.75]], dtype=np.float32)  # Figura inferior derecha
+
+    sample_pos = (xy_pos, size_pos, shapes_pos, color_pos)
+    # --------- Categoria 0 ---------
+    xy_neg, size_neg, shapes_neg, color_neg = decorate_shapes(
+        [shape3.clone(), shape3.clone(), shape4.clone()],
+        max_size=max_size, min_size=min_size, color=color, align=True,
+    )
+    # Ajustamos las posiciones
+    xy_neg[0] = np.array([[0.5, 0.25]], dtype=np.float32)  # Figura superior
+    xy_neg[1] = np.array([[0.25, 0.75]], dtype=np.float32)  # Figura inferior izquierda
+    xy_neg[2] = np.array([[0.75, 0.75]], dtype=np.float32)  # Figura inferior derecha
+
+    sample_neg = (xy_neg, size_neg, shapes_neg, color_neg)
     return sample_neg, sample_pos
 
 
