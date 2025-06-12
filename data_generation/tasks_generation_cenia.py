@@ -106,6 +106,7 @@ def decorate_shapes(
         xy_vals = sample_positions_align(size_batch)[0]
     elif mirror:
         xy_vals = sample_positions_symmetric_pairs(size_batch[0])
+
     elif circle:
         xy_vals = sample_positions_circle(size_batch[0])
     else:
@@ -1150,6 +1151,7 @@ def task_svrt_16(
         n_sides, fourier_terms, symm_rotate
     )
 
+    max_size = 0.2
     # --- Clase 1 ---
     shapes_pos = []
     for i in range(2 * n_pairs):
@@ -1202,7 +1204,7 @@ def task_svrt_17(
 
     # No sé si forzar el tamaño de las figuras, pero lo dejo como parámetro
     min_size = 0.05
-    max_size = 0.3
+    max_size = 0.2
 
     base_shape = create_shape(
         shape_mode, rigid_type, radius, hole_radius,
@@ -1256,13 +1258,13 @@ def task_svrt_18(
     - Clase 0: seis figuras idénticas en posiciones simétricas respecto al eje vertical.
     - Clase 1: seis figuras idénticas posicionadas aleatoriamente.
     """
+    max_size = 0.2
     # --- Clase 1 ---
     shape = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
     shapes_pos = [shape.clone() for _ in range(6)]
     sample_pos = decorate_shapes(shapes_pos, max_size=max_size, min_size=min_size, color=color, mirror=True)
     
     # --- Clase 0 ---
-    # Opcional: pueden ser iguales o diferentes, pero lo clave es que NO usen mirror=True
     shapes_neg = [shape.clone() for _ in range(6)]
     sample_neg = decorate_shapes(shapes_neg, max_size=max_size, min_size=min_size, color=color, mirror=False)
     
@@ -1470,104 +1472,125 @@ def task_svrt_23(
     symm_rotate: bool = True,
     poly_min_sides: int = 3,
     poly_max_sides: int = 10,
-    max_size: float = 0.4,
+    max_size: float = 0.8,
     min_size: float | None = 0.2,
     color: bool = False,
-    rigid_type: str = 'polygon'
+    rigid_type: str = 'polygon',
+    max_tries: int = 50,
 ):
     """
-    SVRT #23 – Devuelve:
-    - Clase 1: tres figuras, dos pequeñas y una grande, donde la figura grande contiene a una de las pequeñas, mientras que la otra está afuera.
-    - Clase 0: tres figuras, dos pequeñas y una grande, donde las dos pequeñas están afuera o dentro de la figura grande.
+    SVRT #23 Devuelve:
+     - Clase 1: una pequeña dentro y otra fuera de la grande.
+     - Clase 0: las dos pequeñas ambas dentro o ambas fuera.
     """
-    # --- Clase 0 ---
-    max_size = 0.8
-    size_outer = max_size
-    size_inner = min_size * 0.4
-    sizes = np.array([[size_outer], [size_inner], [size_inner]], dtype=np.float32)
-    outer   = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
-    inner_1 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
-    inner_2 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
-    shapes_wrapped = [[outer], [inner_1], [inner_2]]
+    # Genera sample_neg
+    for _ in range(max_tries):
+        try:
+            max_size = 0.8
+            size_outer = max_size
+            size_inner = min_size * 0.4
 
-    # Caso 1: Figuras dentro de la figura grande
-    if np.random.rand() < 0.5:
-        scales_rel = [size_inner/size_outer, size_inner/size_outer]
-        rels = sample_position_inside_many(outer, [inner_1, inner_2], scales_rel)
-        if len(rels) == 0:
-            raise RuntimeError("No se encontraron posiciones válidas para la clase positiva.")
-        rel = rels[np.random.randint(len(rels))]  # shape (2,2)
-        c = outer.get_contour()
-        cmin, cmax = c.min(0), c.max(0)
-        crange = cmax - cmin
-        rel_norm = (rel - cmin) / crange    # ahora en [0,1]×[0,1]
-        center = np.array([0.5, 0.5], dtype=np.float32)
-        xy_outer = center
-        offset = (rel_norm - 0.5) * size_outer
-        xy_i1 = center + offset[0]
-        xy_i2 = center + offset[1]
-        xy = np.stack([xy_outer, xy_i1, xy_i2])[:, None, :]  # (3,1,2)
-        
-        if color:
-            cols = sample_random_colors(3)
-            colors = [cols[i:i+1] for i in range(3)]
-        else:
-            colors = [np.zeros((1,3), dtype=np.float32) for _ in range(3)]
-        sample_neg = (xy, sizes, shapes_wrapped, colors)
+            # ——— Clase 0 ———
+            outer0   = create_shape(shape_mode, rigid_type, radius, hole_radius,
+                                    n_sides, fourier_terms, symm_rotate)
+            inner0_1 = create_shape(shape_mode, rigid_type, radius, hole_radius,
+                                    n_sides, fourier_terms, symm_rotate)
+            inner0_2 = create_shape(shape_mode, rigid_type, radius, hole_radius,
+                                    n_sides, fourier_terms, symm_rotate)
+            sizes0 = np.array([[size_outer], [size_inner], [size_inner]], dtype=np.float32)
+            shapes0 = [[outer0], [inner0_1], [inner0_2]]
 
-    # Caso 2: Figuras fuera de la figura grande
-    else:  
-        sample_neg = decorate_shapes(
-            [outer, inner_1, inner_2],
-            max_size=max_size,
-            min_size=min_size,
-            color=color,
-            sizes=sizes
-        )
+            if np.random.rand() < 0.5:
+                # Caso 0a: las dos pequeñas dentro de la grande
+                rels = sample_position_inside_many(
+                    outer0, [inner0_1, inner0_2], [size_inner/size_outer]*2
+                )
+                if len(rels) == 0:
+                    raise RuntimeError("No posiciones válidas clase 0 dentro")
+                raw_rel = rels[np.random.randint(len(rels))]
 
-    # --- Clase 1 ---
-    max_size = 0.8
-    size_outer = max_size
-    size_inner = min_size * 0.4
-    sizes = np.array([[size_outer], [size_inner], [size_inner]], dtype=np.float32)
-    outer   = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
-    inner_1 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
-    inner_2 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
-    shapes_wrapped = [[outer], [inner_1], [inner_2]]
-    
-    # 1) sample inner_1 dentro
-    scale_rel  = size_inner / size_outer
-    cand_in    = sample_position_inside_1(outer, inner_1, scale_rel)
-    if cand_in.shape[0] == 0:
-        raise RuntimeError("No hay posición válida para inner_1 dentro de outer")
-    raw_in     = cand_in[np.random.randint(len(cand_in))]
-    c          = outer.get_contour()
-    cmin, cmax = c.min(0), c.max(0)
-    pos_norm   = (raw_in - cmin) / (cmax - cmin)
-    center     = np.array([0.5, 0.5], dtype=np.float32)
-    offset1    = (pos_norm - center) * size_outer
-    xy_i1      = center + offset1
+                c = outer0.get_contour()
+                cmin, cmax = c.min(0), c.max(0)
+                rel_norm = (raw_rel - cmin) / (cmax - cmin)
+                center = np.array([0.5, 0.5], dtype=np.float32)
+                offset = (rel_norm - 0.5) * size_outer
+                xy0 = np.stack([
+                    center,
+                    center + offset[0],
+                    center + offset[1]
+                ])[:, None, :]
 
-    # 2) sample inner_2 fuera
-    cand_out    = sample_position_outside_1(outer, inner_2, scale_rel)
-    if cand_out.shape[0] == 0:
-        raise RuntimeError("No hay posición válida para inner_2 fuera de outer")
-    raw_out     = cand_out[np.random.randint(len(cand_out))]
-    pos_norm2   = (raw_out - cmin) / (cmax - cmin)
-    offset2     = (pos_norm2 - center) * size_outer
-    xy_i2       = center + offset2
+                if color:
+                    cols0 = sample_random_colors(3)
+                    colors0 = [cols0[i:i+1] for i in range(3)]
+                else:
+                    colors0 = [np.zeros((1,3), dtype=np.float32) for _ in range(3)]
 
-    # 3) montamos el array xy y colores
-    xy_outer = center
-    xy       = np.stack([xy_outer, xy_i1, xy_i2])[:, None, :]  # (3,1,2)
+                sample_neg = (xy0, sizes0, shapes0, colors0)
 
-    if color:
-        cols   = sample_random_colors(3)
-        colors = [cols[i:i+1] for i in range(3)]
-    else:
-        colors = [np.zeros((1,3), dtype=np.float32) for _ in range(3)]
+            else:
+                # Caso 0b: las dos pequeñas fuera
+                sample_neg = decorate_shapes(
+                    [outer0, inner0_1, inner0_2],
+                    sizes=sizes0,
+                    max_size=max_size,
+                    min_size=min_size,
+                    color=color
+                )
 
-    sample_pos = (xy, sizes, shapes_wrapped, colors)
+            break
+
+        except RuntimeError:
+            continue
+
+    # Genera sample_pos
+    for _ in range(max_tries):
+        try:
+            size_outer = max_size
+            size_inner = min_size * size_outer * 0.6
+
+            # ——— Clase 1 ———
+            outer1 = create_shape(shape_mode, rigid_type, radius, hole_radius,
+                                  n_sides, fourier_terms, symm_rotate)
+            inner1 = create_shape(shape_mode, rigid_type, radius, hole_radius,
+                                  n_sides, fourier_terms, symm_rotate)
+            inner2 = create_shape(shape_mode, rigid_type, radius, hole_radius,
+                                  n_sides, fourier_terms, symm_rotate)
+            sizes1 = np.array([[size_outer], [size_inner], [size_inner]], dtype=np.float32)
+
+            # 1) inner1 dentro
+            cand_in = sample_position_inside_1(outer1, inner1, size_inner/size_outer)
+            if cand_in.shape[0] == 0:
+                raise RuntimeError("No pos válida inner1 dentro")
+            raw_in = cand_in[np.random.randint(len(cand_in))]
+            c = outer1.get_contour()
+            cmin, cmax = c.min(0), c.max(0)
+            pos_norm = (raw_in - cmin) / (cmax - cmin)
+            center = np.array([0.5, 0.5], dtype=np.float32)
+            xy1 = center + (pos_norm - center) * size_outer
+
+            # 2) inner2 fuera
+            cand_out = sample_position_outside_1(outer1, inner2, size_inner/size_outer)
+            if cand_out.shape[0] == 0:
+                raise RuntimeError("No pos válida inner2 fuera")
+            raw_out = cand_out[np.random.randint(len(cand_out))]
+            pos_norm2 = (raw_out - cmin) / (cmax - cmin)
+            xy2 = center + (pos_norm2 - center) * size_outer
+
+            xy_pos = np.stack([center, xy1, xy2])[:, None, :]
+
+            if color:
+                cols1 = sample_random_colors(3)
+                colors1 = [cols1[i:i+1] for i in range(3)]
+            else:
+                colors1 = [np.zeros((1,3), dtype=np.float32) for _ in range(3)]
+
+            sample_pos = (xy_pos, sizes1, [[outer1], [inner1], [inner2]], colors1)
+
+            break
+
+        except RuntimeError:
+            continue
 
     return sample_neg, sample_pos
 

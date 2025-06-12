@@ -37,124 +37,105 @@ def hsv_to_rgb(h, s, v):
         return v, p, q
 
 # helper functions
-def sample_position_inside_1(s1, s2, scale):
-    c1 = s1.get_contour()
-    c2 = s2.get_contour()
-    
-    c2 = c2 * scale
-    bb_2 = c2.max(0) - c2.min(0)
+from shapely.geometry import Polygon, Point
+import numpy as np
 
-    # sampling points
-    range_ = (c1.max(0) - c1.min(0) - bb_2)
-    starting = (c1.min(0) + bb_2/2)
-    samples = np.random.rand(100, 2) * range_[None,:] + starting[None,:]
-
-    p1c = np.concatenate([c1[:-1], c1[1:]], 1)[None,:,:]
-    samples = samples[:,None,:]
-    res = np.logical_and(
-        np.logical_or(
-            p1c[:,:,0:1] < samples[:,:,0:1], 
-            p1c[:,:,2:3] < samples[:,:,0:1]), 
-        np.logical_xor(
-            p1c[:,:,1:2] <= samples[:,:,1:2], 
-            p1c[:,:,3:4] <= samples[:,:,1:2])
-        )[:,:,0]
-    res1 = (res.sum(1)%2==1)
-    res2 = (np.abs(samples - c1) > bb_2[None,None,:]/2).any(2).all(1)
-
-    res = np.logical_and(res1, res2)
-
-    samples = samples[res,0]
-
-    return samples
-
-def sample_position_inside_many(s1, shapes, scales):
-    c1 = s1.get_contour()
-    c2s = [s2.get_contour() for s2 in shapes]
-
-    bbs_2 = np.array([c2.max(0) - c2.min(0) for c2 in c2s]) * np.array(scales)[:,None]
-
-    n_shapes = len(shapes)
-
-    # sampling points
-    ranges_ = (c1.max(0)[None,:] - c1.min(0)[None,:] - bbs_2)
-    starting = (c1.min(0)[None,:] + bbs_2/2)
-    samples = np.random.rand(500, n_shapes, 2) * ranges_[None, :, :] + starting[None, :, :]
-
-    dists = np.abs(samples[:,:,None,:] - samples[:,None,:,:]) - (bbs_2[None,:,None,:] + bbs_2[None,None,:,:])/2 > 0
-    triu_idx = np.triu_indices(n_shapes, k=1)[0]*n_shapes + np.triu_indices(n_shapes, k=1)[1]
-    no_overlap = dists.any(3).reshape(500, n_shapes*n_shapes)[:, triu_idx].all(1)
-
-    samples = samples[no_overlap]
-
-    n_samples_left = len(samples)
-    bb_2_ = np.concatenate([bbs_2]*n_samples_left, 0)
-
-    samples = samples.reshape([n_samples_left*n_shapes, 2])
-
-    p1c = np.concatenate([c1[:-1], c1[1:]], 1)[None,:,:]
-    samples = samples[:,None,:]
-    res = np.logical_and(
-        np.logical_or(
-            p1c[:,:,0:1] < samples[:,:,0:1],
-            p1c[:,:,2:3] < samples[:,:,0:1]),
-        np.logical_xor(
-            p1c[:,:,1:2] <= samples[:,:,1:2],
-            p1c[:,:,3:4] <= samples[:,:,1:2])
-        )[:,:,0]
-    res1 = (res.sum(1)%2==1)
-    res2 = (np.abs(samples - c1[None,:,:]) > bb_2_[:,None,:]/2).any(2).all(1)
-
-    res = np.logical_and(res1, res2)
-    res = res.reshape([-1, n_shapes]).all(1)
-    samples = samples.reshape([-1, n_shapes, 2])
-
-    # samples = samples[res,0]
-    samples = samples[res]
-        
-    return samples
-
-def sample_position_outside_1(s1, s2, scale):
+def sample_position_inside_1(s1, s2, scale, n_candidates: int = 200):
     """
-    Muestrea posibles posiciones absolutas del centro de s2 (escalado por 'scale')
-    para ubicarla completamente fuera del contorno de s1.
-    Devuelve un array (M,2) de coordenadas válidas.
+    Centros de s2 escalado que queden totalmente dentro de s1
+    (usando disco de radio r_small para erosión).
     """
-    # contornos
-    c1 = s1.get_contour()                 # (N,2) de la forma grande
-    c2 = s2.get_contour() * scale         # (N,2) de la forma chica escalada
-    bb_2 = c2.max(0) - c2.min(0)          # bbox de la forma chica
+    c1 = s1.get_contour()
+    outer = Polygon(c1)
+    # radio aproximado de s2
+    c2 = s2.get_contour() * scale
+    cen2 = c2.mean(axis=0)
+    r_small = np.max(np.linalg.norm(c2 - cen2, axis=1))
+    # región factible tras erosión
+    region = outer.buffer(-r_small)
+    if region.is_empty:
+        return np.empty((0,2))
+    # bounds válidos
+    minx, miny, maxx, maxy = region.bounds
+    lo = np.array([minx, miny], dtype=float)
+    hi = np.array([maxx, maxy], dtype=float)
+    if np.any(hi <= lo):
+        return np.empty((0,2))
+    # muestreo vectorizado
+    pts = np.random.rand(n_candidates, 2) * (hi - lo)[None, :] + lo[None, :]
+    # filtro por contención en la región
+    mask = np.array([region.contains(Point(x, y)) for x, y in pts])
+    return pts[mask]
 
-    # generar candidatos en el bbox reducido de c1
-    range_   = (c1.max(0) - c1.min(0) - bb_2)
-    starting = (c1.min(0) + bb_2 / 2)
-    samples  = np.random.rand(100, 2) * range_[None, :] + starting[None, :]
 
-    # montar para el test de ray-casting
-    p1c     = np.concatenate([c1[:-1], c1[1:]], 1)[None, :, :]
-    samples = samples[:, None, :]  # (100,1,2)
+def sample_position_outside_1(s1, s2, scale, n_candidates: int = 200):
+    """
+    Centros de s2 escalado que queden totalmente fuera de s1,
+    muestreados en bbox extendido.
+    """
+    c1 = s1.get_contour()
+    outer = Polygon(c1)
+    # radio aproximado de s2
+    c2 = s2.get_contour() * scale
+    cen2 = c2.mean(axis=0)
+    r_small = np.max(np.linalg.norm(c2 - cen2, axis=1))
+    # bbox extendido
+    minx, miny = c1.min(0) - r_small
+    maxx, maxy = c1.max(0) + r_small
+    lo = np.array([minx, miny], dtype=float)
+    hi = np.array([maxx, maxy], dtype=float)
+    # muestreo vectorizado
+    pts = np.random.rand(n_candidates, 2) * (hi - lo)[None, :] + lo[None, :]
+    valid = []
+    for x, y in pts:
+        small = Polygon(c2 + np.array([x, y]))
+        if small.disjoint(outer):
+            valid.append((x, y))
+    return np.array(valid)
 
-    # test "punto en polígono" igual que inside, pero invertido para outside
-    res = np.logical_and(
-        np.logical_or(
-            p1c[:, :, 0:1] < samples[:, :, 0:1],
-            p1c[:, :, 2:3] < samples[:, :, 0:1]
-        ),
-        np.logical_xor(
-            p1c[:, :, 1:2] <= samples[:, :, 1:2],
-            p1c[:, :, 3:4] <= samples[:, :, 1:2]
-        )
-    )[:, :, 0]
-    inside_mask = (res.sum(1) % 2 == 1)
 
-    # test de no colisión con el borde (igual que inside)
-    safe_mask = (np.abs(samples - c1) > bb_2[None, None, :] / 2).any(2).all(1)
-
-    # quedarnos sólo con los que NO están dentro y además no colisionan
-    outside_mask = np.logical_and(~inside_mask, safe_mask)
-
-    # devolver coordenadas (M,2) en sistema absoluto
-    return samples[outside_mask, 0]
+def sample_position_inside_many(s1, shapes, scales, n_candidates: int = 500):
+    """
+    Sets de centros para shapes escalados que queden dentro de s1
+    sin solaparse (aprox. con discos).
+    """
+    c1 = s1.get_contour()
+    outer = Polygon(c1)
+    # radios de cada shape
+    radii = []
+    for shp, sc in zip(shapes, scales):
+        c2 = shp.get_contour() * sc
+        cen2 = c2.mean(axis=0)
+        r = np.max(np.linalg.norm(c2 - cen2, axis=1))
+        radii.append(r)
+    # erosión con el mayor radio
+    R = max(radii)
+    region = outer.buffer(-R)
+    if region.is_empty:
+        return np.zeros((0, len(shapes), 2))
+    # bounds válidos
+    minx, miny, maxx, maxy = region.bounds
+    lo = np.array([minx, miny], dtype=float)
+    hi = np.array([maxx, maxy], dtype=float)
+    # muestreo vectorizado de candidatos
+    pts = np.random.rand(n_candidates, len(shapes), 2) * (hi - lo)[None, None, :] + lo[None, None, :]
+    valids = []
+    for centers in pts:
+        # 1) todos los centros en la región
+        if not all(region.contains(Point(*centers[i])) for i in range(len(shapes))):
+            continue
+        # 2) no solapamiento circular
+        ok = True
+        for i in range(len(shapes)):
+            for j in range(i+1, len(shapes)):
+                if np.linalg.norm(centers[i] - centers[j]) <= radii[i] + radii[j]:
+                    ok = False
+                    break
+            if not ok:
+                break
+        if ok:
+            valids.append(centers)
+    return np.array(valids)
 
 
 
@@ -454,52 +435,75 @@ def sample_positions_align(size):
     return xy
 
 
-def sample_positions_symmetric_pairs(size, margin_x=0.08, margin_y=0.08, min_dist=0.01, max_tries=100):
+
+def sample_positions_symmetric_pairs(
+    size, 
+    margin_x=0.08, 
+    margin_y=0.08, 
+    min_dist=0.01, 
+    max_tries=100,
+    max_pair_tries=50
+):
     """
-    Genera posiciones (x, y) para 3 pares de objetos simétricos respecto al eje x=0.5.
-    Asegura que no se solapen. 
-    size: (n, 1) donde n=6 (seis objetos).
+    Genera posiciones (x, y) para 3 pares de objetos simétricos respecto al eje x=0.5,
+    muestreando cada par por separado y comprobando solapamientos contra todos los anteriores.
+    size: array (6,1) con los diámetros de cada figura (3 pares).
     Return: xy de shape (6, 2)
     """
     assert size.shape[0] == 6, "size debe tener longitud 6 (3 pares)."
-    xy = np.zeros((6, 2))
-    tries = 0
+    sizes = size.flatten()
+    # radios de cada figura
+    radios = sizes / 2  
 
-    while tries < max_tries:
-        x_vals = []
-        y_vals = []
-        # Generar 3 pares
+    for attempt in range(max_tries):
+        xy = np.zeros((6, 2))
+        placed_centers = []
+        placed_radii  = []
+
+        success = True
+        # iterar sobre los 3 pares
         for pair in range(3):
-            s = size[2 * pair, 0]
-            # Escoge x para la izquierda (margen, centro)
-            x_l = np.random.uniform(margin_x + s / 2, 0.5 - min_dist - s / 2)
-            # Su simétrico
-            x_r = 1.0 - x_l
-            # Escoge y para ambos (margen inferior, superior)
-            y = np.random.uniform(margin_y + s / 2, 1 - margin_y - s / 2)
-            x_vals.extend([x_l, x_r])
-            y_vals.extend([y, y])
+            pair_placed = False
+            for _ in range(max_pair_tries):
+                s = radios[2*pair]  # radio de la figura del par
+                # muestrea x izquierdo dentro de márgenes
+                x_l = np.random.uniform(margin_x + s, 0.5 - min_dist - s)
+                x_r = 1.0 - x_l
+                # muestrea y común dentro de márgenes
+                y = np.random.uniform(margin_y + s, 1 - margin_y - s)
 
-        xy[:, 0] = x_vals
-        xy[:, 1] = y_vals
+                cand_l = np.array([x_l, y])
+                cand_r = np.array([x_r, y])
 
-        # Chequea no solapamiento entre objetos (usando distancia euclideana + tamaños)
-        min_ok = True
-        for i in range(6):
-            for j in range(i + 1, 6):
-                dx = xy[i, 0] - xy[j, 0]
-                dy = xy[i, 1] - xy[j, 1]
-                dist = np.sqrt(dx ** 2 + dy ** 2)
-                min_allowed = (size[i, 0] + size[j, 0]) / 2 + min_dist
-                if dist < min_allowed:
-                    min_ok = False
-        if min_ok:
-            break
-        tries += 1
+                # chequeo solapamiento contra ya ubicados
+                overlap = False
+                for (ec, er) in zip(placed_centers, placed_radii):
+                    if np.linalg.norm(cand_l - ec) < (s + er) + min_dist or \
+                       np.linalg.norm(cand_r - ec) < (s + er) + min_dist:
+                        overlap = True
+                        break
 
-    if tries >= max_tries:
-        print("Advertencia: No se pudo encontrar disposición sin solapamiento, devolviendo último intento.")
+                if overlap:
+                    continue
 
+                # si llega acá, ambos son válidos
+                idx_l, idx_r = 2*pair, 2*pair+1
+                xy[idx_l] = cand_l
+                xy[idx_r] = cand_r
+                placed_centers += [cand_l, cand_r]
+                placed_radii  += [s, s]
+                pair_placed = True
+                break
+
+            if not pair_placed:
+                success = False
+                break
+
+        if success:
+            return xy
+
+    # si no encontró configuración tras max_tries:
+    print(f"Advertencia: no halló disposición tras {max_tries} intentos.")
     return xy
 
 
@@ -526,54 +530,72 @@ def sample_points_in_circle(
 
 
 def sample_positions_circle(
-    sizes,                 # array (4, 1) o (4,)
-    odd_radius=0.2,        # radio del círculo donde puede ir el odd
-    min_circle_radius=0.10,# menor distancia del círculo de clones al odd
-    max_circle_radius=1,# mayor distancia posible (ajusta según tamaño)
-    max_tries=200
+    sizes,
+    min_circle_radius=0.10,
+    max_circle_radius=1.0,
+    max_tries=200,
+    max_clone_tries=100
 ):
     """
-    Genera posiciones (x, y) para 3 figuras iguales en círculo alrededor del odd,
-    con distancia aleatoria (en cada intento) dentro de [min_circle_radius, max_circle_radius].
-    No hay solapamiento y todo está dentro de [0,1]^2.
+    Coloca primero el odd aleatoriamente en [margin,1-margin]^2.
+    Luego muestrea clones uno a uno:
+      - Descarta si sale del margen.
+      - Descarta si solapa con odd o con cualquier clone previo.
+      - Guarda si es válido.
+    Devuelve cuando hay 3 clones válidos o tras max_tries.
     """
     sizes = np.array(sizes).flatten()
-    margin = np.max(sizes) / 2
+    margin     = np.max(sizes) / 2
+    rad_clone  = sizes[0]    # asumimos clones todos con el mismo tamaño
+    rad_odd    = sizes[3]    # odd
 
-    tries = 0
-    while tries < max_tries:
-        # 1. Elige centro del odd en círculo (usa sample_points_in_circle)
-        odd_center = sample_points_in_circle(1, radius=odd_radius, center=(0.5, 0.5))[0]
+    for attempt in range(max_tries):
+        # 1) ubica el odd
+        odd_center = np.random.uniform(margin, 1 - margin, size=2)
 
-        # 2. Sortea radio para las 3 iguales (aleatorio en cada intento)
+        # 2) elige radio del círculo
         circle_radius = np.random.uniform(min_circle_radius, max_circle_radius)
 
-        # 3. Genera 3 puntos en círculo alrededor del odd (en el borde)
-        base_pos = sample_points_in_circle(3, radius=circle_radius, center=odd_center, on_edge=True)
+        clones = []
+        clone_attempts = 0
 
-        xy = np.zeros((4, 2))
-        xy[3] = odd_center    # idx 3 = odd (puedes randomizar el idx si prefieres)
-        xy[:3] = base_pos
+        # 3) muestrea clones hasta tener 3 válidos
+        while len(clones) < 3 and clone_attempts < max_clone_tries:
+            theta     = np.random.rand() * 2 * np.pi
+            candidate = odd_center + np.array([np.cos(theta), np.sin(theta)]) * circle_radius
 
-        # 4. Chequea bordes
-        if not np.all((xy >= margin) & (xy <= 1 - margin)):
-            tries += 1
-            continue
+            # Chequeo de márgenes
+            if not np.all((candidate >= margin) & (candidate <= 1 - margin)):
+                clone_attempts += 1
+                continue
 
-        # 5. Chequea solapamiento
-        ok = True
-        for i in range(4):
-            for j in range(i + 1, 4):
-                dist = np.linalg.norm(xy[i] - xy[j])
-                min_dist = (sizes[i] + sizes[j]) / 2
-                if dist < min_dist:
-                    ok = False
-        if ok:
-            return xy
-        tries += 1
+            # Preparo lista de centros y radios para chequeo genérico
+            existing_centers = clones + [odd_center]
+            existing_radii   = [rad_clone] * len(clones) + [rad_odd]
 
-    print("Advertencia: No se pudo encontrar disposición sin solapamiento tras varios intentos.")
-    return xy
+            # Chequeo genérico de solapamiento
+            overlap = False
+            for ec, er in zip(existing_centers, existing_radii):
+                # distancia centro-a-centro vs semidiámetros
+                if np.linalg.norm(candidate - ec) < (rad_clone + er) / 2:
+                    overlap = True
+                    break
+
+            if overlap:
+                clone_attempts += 1
+                continue
+
+            # posición válida: la guardo
+            clones.append(candidate)
+
+        # Si ya tengo 3 clones, retorno las 4 posiciones
+        if len(clones) == 3:
+            return np.vstack([clones, odd_center])
+
+    # Si no encontró configuración tras max_tries
+    print(f"Advertencia: no halló disposición tras {max_tries} intentos.")
+    return np.vstack([clones, odd_center])
+
 
 def compute_inscribed_circle(shape, resolution=100):
     """
