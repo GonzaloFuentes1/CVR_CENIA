@@ -1764,12 +1764,461 @@ def task_RMTS(
     rigid_type: str = 'polygon'
 ):
     """
-    RMTS – Devuelve...
+    RMTS 
+        AB
+    CD       EF
+    Clase 0: A == B y C == D y E != F o A != B y C != D y E == F
+    Clase 1: A == B y C != D y E == F o A != B y C == D y E != F
     """
-    sample_pos = False
-    sample_neg = False
+    max_size *= 0.4 # Ajuste para que figuras quepan sin superponerse, y permitir separar los pares
+
+    fixed_xy = np.array([
+        [0.4, 0.25],  # A
+        [0.6, 0.25],  # B
+        [0.15, 0.75],  # C
+        [0.35, 0.75],  # D
+        [0.65, 0.75],  # E
+        [0.85, 0.75],  # F
+    ])[:, None, :]  # shape (6, 1, 2)
+
+    # Categoría 0:
+    if np.random.rand() < 0.5:
+        # A == B y C == D y E != F
+        shape_ab = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shape_cd = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shape_e = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shape_f = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shapes_neg = [shape_ab, shape_ab.clone(), shape_cd, shape_cd.clone(), shape_e, shape_f]
+        xy, size, shapes_neg, colors_neg = decorate_shapes(
+            shapes_neg,
+            max_size=max_size, min_size=min_size, color=color, sizes=[[max_size]] * 6
+        )
+        sample_neg = (fixed_xy, size, shapes_neg, colors_neg)
+    else:
+        # A != B y C != D y E == F
+        shape_a = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shape_b = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shape_c = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shape_d = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shape_ef = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shapes_neg = [shape_a, shape_b, shape_c, shape_d, shape_ef, shape_ef.clone()]
+        xy, size, shapes_neg, colors_neg = decorate_shapes(
+            shapes_neg,
+            max_size=max_size, min_size=min_size, color=color, sizes=[[max_size]] * 6
+        )
+        sample_neg = (fixed_xy, size, shapes_neg, colors_neg)
+
+    # Categoría 1:
+    if np.random.rand() < 0.5:
+        # A == B y C != D y E == F
+        shape_ab = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shape_c = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shape_d = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shape_ef = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shapes_pos = [shape_ab, shape_ab.clone(), shape_c, shape_d, shape_ef, shape_ef.clone()]
+        xy, size, shapes_pos, colors_pos = decorate_shapes(
+            shapes_pos,
+            max_size=max_size, min_size=min_size, color=color, sizes=[[max_size]] * 6
+        )
+        sample_pos = (fixed_xy, size, shapes_pos, colors_pos)
+    else:
+        # A != B y C == D y E != F
+        shape_a = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shape_b = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shape_cd = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shape_e = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shape_f = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shapes_pos = [shape_a, shape_b, shape_cd, shape_cd.clone(), shape_e, shape_f]
+        xy, size, shapes_pos, colors_pos = decorate_shapes(
+            shapes_pos,
+            max_size=max_size, min_size=min_size, color=color, sizes=[[max_size]] * 6
+        )
+        sample_pos = (fixed_xy, size, shapes_pos, colors_pos)
+
     return sample_neg, sample_pos
 
+# ---------- Tareas basadas en simetría ----------
+
+# ---------- Tarea de clasificación de simetría ----------
+
+def task_sym_classification(
+    shape_mode: str = 'normal',
+    radius: float = 0.5,
+    hole_radius: float = 0.05,
+    n_sides: int = 5,
+    fourier_terms: int = 20,
+    symm_rotate: bool = True,
+    poly_min_sides: int = 3,
+    poly_max_sides: int = 10,
+    max_size: float = 0.4,
+    min_size: float | None = 0.2,
+    color: bool = False,
+    rigid_type: str = 'polygon'
+):
+    """
+    Clase 0: Figura es asimétrica
+    Clase 1: Figura es simétrica
+    """
+
+    # Clase 0: Figura asimétrica
+    shape_neg = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    sample_neg = decorate_shapes(
+        [shape_neg],
+        max_size=max_size,
+        min_size=min_size,
+        color=color,
+        sizes=[[max_size]]
+    )
+
+    # Clase 1: Figura simétrica
+    shape_pos = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    # Aplicar simetría
+    shape_pos.symmetrize(rotate = True)
+    sample_pos = decorate_shapes(
+        [shape_pos],
+        max_size=max_size,
+        min_size=min_size,
+        color=color,
+        sizes=[[max_size]]
+    )
+
+    return sample_neg, sample_pos
+
+# ---------- Tarea MTS basada en simetría ----------
+
+def task_sym_MTS(
+    shape_mode: str = 'normal',
+    radius: float = 0.5,
+    hole_radius: float = 0.05,
+    n_sides: int = 5,
+    fourier_terms: int = 20,
+    symm_rotate: bool = True,
+    poly_min_sides: int = 3,
+    poly_max_sides: int = 10,
+    max_size: float = 0.4,
+    min_size: float | None = 0.2,
+    color: bool = False,
+    rigid_type: str = 'polygon'
+):
+    """
+    Tarea de clasificación de simetría MTS.
+    En clase 0, figura de la izquierda tiene mismo estatus de simetría que figura de arriba, mientras que figura de la derecha tiene el estatus opuesto.
+    En clase 1, figura de la derecha tiene el mismo estatus de simetría que figura de arriba, mientras que figura de la izquierda tiene el estatus opuesto.
+    """
+
+    fixed_xy = np.array([
+        [0.5, 0.25],  # A
+        [0.25, 0.75],  # B
+        [0.75, 0.75]   # C
+    ])[:, None, :]  # shape (3, 1, 2)
+
+    # Clase 0
+    shapes = [create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate) for _ in range(3)]
+
+    if np.random.rand() < 0.5:
+        # Comparten simetría
+        shapes[0].symmetrize(rotate=True)  # A simétrica
+        shapes[1].symmetrize(rotate=True)
+    else:
+        # A y B comparten ser asimétricas, C es simétrica
+        shapes[2].symmetrize(rotate=True)  # C simétrica
+
+    xy, size, shapes_neg, colors_neg = decorate_shapes(
+        shapes,
+        max_size=max_size, min_size=min_size, color=color, sizes=[[max_size]] * 3
+    )
+    sample_neg = (fixed_xy, size, shapes_neg, colors_neg)
+
+    # Clase 1
+    shapes = [create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate) for _ in range(3)]
+    if np.random.rand() < 0.5:
+        # A y C comparten simetría, B es asimétrica
+        shapes[0].symmetrize(rotate=True)  # A simétrica
+        shapes[2].symmetrize(rotate=True)  # C simétrica
+    else:
+        # A y C son asimétricas, B es simétrica
+        shapes[1].symmetrize(rotate=True)
+    xy, size, shapes_pos, colors_pos = decorate_shapes(
+        shapes,
+        max_size=max_size, min_size=min_size, color=color, sizes=[[max_size]] * 3
+    )
+    sample_pos = (fixed_xy, size, shapes_pos, colors_pos)
+
+    return sample_neg, sample_pos
+
+# ---------- Tarea SD basada en simetría ----------
+
+def task_sym_SD(
+    shape_mode: str = 'normal',
+    radius: float = 0.5,
+    hole_radius: float = 0.05,
+    n_sides: int = 5,
+    fourier_terms: int = 20,
+    symm_rotate: bool = True,
+    poly_min_sides: int = 3,
+    poly_max_sides: int = 10,
+    max_size: float = 0.4,
+    min_size: float | None = 0.2,
+    color: bool = False,
+    rigid_type: str = 'polygon'
+):
+    """
+    Tarea de clasificación de simetría SD.
+    Clase 0: Una figura simétrica y una asimétrica.
+    Clase 1: Ambas figuras son simétricas o ambas son asimétricas.
+    """
+
+    # Clase 0: Una figura simétrica y una asimétrica
+    shape1 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    shape2 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    shape2.symmetrize(rotate=True)  # Hacemos que shape2 sea simétrica
+    sample_neg = decorate_shapes(
+        [shape1, shape2],
+        max_size=max_size,
+        min_size=min_size,
+        color=color,
+        sizes=[[max_size], [max_size]]
+    )
+    # Clase 1: Ambas figuras son simétricas o ambas son asimétricas
+    shape1 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    shape2 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+    if np.random.rand() < 0.5:
+        # Ambas figuras simétricas
+        shape1.symmetrize(rotate=True)
+        shape2.symmetrize(rotate=True)
+    sample_pos = decorate_shapes(
+        [shape1, shape2],
+        max_size=max_size,
+        min_size=min_size,
+        color=color,
+        sizes=[[max_size], [max_size]]
+    )
+
+    return sample_neg, sample_pos
+
+# ---------- Tarea SOSD basada en simetría ----------
+
+def task_sym_SOSD(
+    shape_mode: str = 'normal',
+    radius: float = 0.5,
+    hole_radius: float = 0.05,
+    n_sides: int = 5,
+    fourier_terms: int = 20,
+    symm_rotate: bool = True,
+    poly_min_sides: int = 3,
+    poly_max_sides: int = 10,
+    max_size: float = 0.4,
+    min_size: float | None = 0.2,
+    color: bool = False,
+    rigid_type: str = 'polygon'
+):
+    """
+    Tarea de clasificación de simetría SOSD.
+    Clase 1: Ambos pares de figuras tienen misma relación de simetría
+    Es decir, si en un par ambas son simétricas, en el otro par debe ocurrir lo mismo.
+    Si en un par una es simétrica y la otra no, en el otro par debe ocurrir lo mismo.
+    Si en un par ambas son asimétricas, en el otro par debe ocurrir lo mismo. 
+    -------Duda: Consideramos este último caso?---------
+
+    Clase 0: Un par de figuras tiene una relación de simetría diferente al otro par.
+    """
+
+    fixed_xy = np.array([
+        [0.25, 0.25],  # A
+        [0.75, 0.25],  # B
+        [0.25, 0.75],  # C
+        [0.75, 0.75]   # D
+    ])[:, None, :]  # shape (4, 1, 2)
+
+    # Clase 0
+    shapes = [create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate) for _ in range(4)]
+
+    if np.random.rand() < 0.5:
+        # Relación de arriba será 1 sim y 1 asim
+        if np.random.rand() < 0.5:
+            shapes[0].symmetrize(rotate=True)  # A simétrica
+        else:
+            shapes[1].symmetrize(rotate=True)
+        # Relación de abajo puede ser sim sim o asim asim
+        if np.random.rand() < 0.5:
+            shapes[2].symmetrize(rotate=True)
+            shapes[3].symmetrize(rotate=True)
+        else:
+            # Ambas asimétricas
+            pass
+    else:
+        # Relación de arriba será sim sim o asim asim
+        if np.random.rand() < 0.5:
+            shapes[0].symmetrize(rotate=True)
+            shapes[1].symmetrize(rotate=True)
+        else:
+            # Ambas asimétricas
+            pass  
+        # Relación de abajo será 1 sim y 1 asim
+        if np.random.rand() < 0.5:
+            shapes[2].symmetrize(rotate=True)
+        else:
+            shapes[3].symmetrize(rotate=True)
+    xy, size, shapes_neg, colors_neg = decorate_shapes(
+        shapes,
+        max_size=max_size, min_size=min_size, color=color, sizes=[[max_size]] * 4
+    )
+    sample_neg = (fixed_xy, size, shapes_neg, colors_neg)
+
+    # Clase 1
+    shapes = [create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate) for _ in range(4)]
+    if np.random.rand() < 0.5:
+        # Relación de arriba será 1 sim y 1 asim
+        if np.random.rand() < 0.5:
+            shapes[0].symmetrize(rotate=True)  # A simétrica
+        else:
+            shapes[1].symmetrize(rotate=True)
+        # Relación de abajo será igual a la de arriba (1 y 1)
+        if np.random.rand() < 0.5:
+            shapes[2].symmetrize(rotate=True)
+        else:
+            shapes[3].symmetrize(rotate=True)
+    else:
+        # Relación de arriba será sim sim o asim asim
+        if np.random.rand() < 0.5:
+            shapes[0].symmetrize(rotate=True)
+            shapes[1].symmetrize(rotate=True)
+            # Relación de abajo será igual a la de arriba
+            shapes[2].symmetrize(rotate=True)
+            shapes[3].symmetrize(rotate=True)
+        else:
+            # Ambas asimétricas
+            # Relación de abajo será igual a la de arriba
+            pass  
+
+    xy, size, shapes_pos, colors_pos = decorate_shapes(
+        shapes,
+        max_size=max_size, min_size=min_size, color=color, sizes=[[max_size]] * 4
+    )
+    sample_pos = (fixed_xy, size, shapes_pos, colors_pos)
+
+    return sample_neg, sample_pos
+
+# ---------- Tarea RMTS basada en simetría ----------
+
+def task_sym_RMTS(
+    shape_mode: str = 'normal',
+    radius: float = 0.5,
+    hole_radius: float = 0.05,
+    n_sides: int = 5,
+    fourier_terms: int = 20,
+    symm_rotate: bool = True,
+    poly_min_sides: int = 3,
+    poly_max_sides: int = 10,
+    max_size: float = 0.4,
+    min_size: float | None = 0.2,
+    color: bool = False,
+    rigid_type: str = 'polygon'
+):
+    """
+    Tarea de clasificación de simetría RMTS.
+    Clase 0: par de la izquierda tiene misma relación de simetría que el par de arriba, mientras que el par de la derecha tiene una relación diferente.
+    Clase 1: par de la izquierda tiene relación de simetría diferente al par de arriba, mientras que el par de la derecha tiene la misma relación que el par de arriba.
+    """
+    max_size *= 0.4 # Ajuste para que figuras quepan sin superponerse, y permitir separar los pares
+
+    fixed_xy = np.array([
+        [0.4, 0.25],  # A
+        [0.6, 0.25],  # B
+        [0.15, 0.75],  # C
+        [0.35, 0.75],  # D
+        [0.65, 0.75],  # E
+        [0.85, 0.75],  # F
+    ])[:, None, :]  # shape (6, 1, 2)
+
+    # Clase 0
+    shapes = [create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate) for _ in range(6)]
+    if np.random.rand() < 0.5:
+        # arriba relación 1 sim y 1 asim
+        if np.random.rand() < 0.5:
+            shapes[0].symmetrize(rotate=True)
+        else:
+            shapes[1].symmetrize(rotate=True)
+        # izquierda relación 1 sim y 1 asim
+        if np.random.rand() < 0.5:
+            shapes[2].symmetrize(rotate=True)
+        else:
+            shapes[3].symmetrize(rotate=True)
+        # derecha ambos sim o ambos asim
+        if np.random.rand() < 0.5:
+            shapes[4].symmetrize(rotate=True)
+            shapes[5].symmetrize(rotate=True)
+        else:
+            # Ambas asimétricas
+            pass
+    else:
+        # arriba relación sim sim o asim asim
+        if np.random.rand() < 0.5:
+            shapes[0].symmetrize(rotate=True)
+            shapes[1].symmetrize(rotate=True)
+            # izquierda misma relación
+            shapes[2].symmetrize(rotate=True)
+            shapes[3].symmetrize(rotate=True)
+        else:
+            # Ambas asimétricas
+            # izquierda misma relación
+            pass
+        # derecha relación 1 sim y 1 asim
+        if np.random.rand() < 0.5:
+            shapes[4].symmetrize(rotate=True)
+        else:
+            shapes[5].symmetrize(rotate=True)
+    xy, size, shapes_neg, colors_neg = decorate_shapes(
+        shapes,
+        max_size=max_size, min_size=min_size, color=color, sizes=[[max_size]] * 6
+    )
+    sample_neg = (fixed_xy, size, shapes_neg, colors_neg)
+
+    # Clase 1
+    shapes = [create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate) for _ in range(6)]
+
+    if np.random.rand() < 0.5:
+        # arriba relación 1 sim y 1 asim
+        if np.random.rand() < 0.5:
+            shapes[0].symmetrize(rotate=True)
+        else:
+            shapes[1].symmetrize(rotate=True)
+        # izquierda relación sim sim o asim asim
+        if np.random.rand() < 0.5:
+            shapes[2].symmetrize(rotate=True)
+            shapes[3].symmetrize(rotate=True)
+        else:
+            # Ambas asimétricas
+            pass
+        # derecha relación 1 sim y 1 asim
+        if np.random.rand() < 0.5:
+            shapes[4].symmetrize(rotate=True)
+        else:
+            shapes[5].symmetrize(rotate=True)
+    else:
+        # arriba relación sim sim o asim asim
+        if np.random.rand() < 0.5:
+            shapes[0].symmetrize(rotate=True)
+            shapes[1].symmetrize(rotate=True)
+            # derecha misma relación
+            shapes[4].symmetrize(rotate=True)
+            shapes[5].symmetrize(rotate=True)
+        else:
+            # Ambas asimétricas
+            # derecha misma relación
+            pass
+        # izquierda relación 1 sim y 1 asim
+        if np.random.rand() < 0.5:
+            shapes[2].symmetrize(rotate=True)
+        else:
+            shapes[3].symmetrize(rotate=True)
+    xy, size, shapes_pos, colors_pos = decorate_shapes(
+        shapes,
+        max_size=max_size, min_size=min_size, color=color, sizes=[[max_size]] * 6
+    )
+    sample_pos = (fixed_xy, size, shapes_pos, colors_pos)
+
+    return sample_neg, sample_pos
 
 # ---------- Registro de tareas ----------
 # Tareas SVRT y tareas cenia
@@ -1800,5 +2249,10 @@ TASKS_SVRT = [
     ["task_MTS", task_MTS],
     ["task_SD", task_SD],
     ["task_SOSD", task_SOSD],
-    ["task_RMTS", task_RMTS]
+    ["task_RMTS", task_RMTS],
+    ["task_sym_classification", task_sym_classification],
+    ["task_sym_MTS", task_sym_MTS],
+    ["task_sym_SD", task_sym_SD],
+    ["task_sym_SOSD", task_sym_SOSD],
+    ["task_sym_RMTS", task_sym_RMTS]
 ]
