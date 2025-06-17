@@ -1764,10 +1764,77 @@ def task_RMTS(
     rigid_type: str = 'polygon'
 ):
     """
-    RMTS – Devuelve...
+    RMTS 
+        AB
+    CD       EF
+    Clase 0: A == B y C == D y E != F o A != B y C != D y E == F
+    Clase 1: A == B y C != D y E == F o A != B y C == D y E != F
     """
-    sample_pos = False
-    sample_neg = False
+    max_size *= 0.4 # Ajuste para que figuras quepan sin superponerse, y permitir separar los pares
+
+    fixed_xy = np.array([
+        [0.4, 0.25],  # A
+        [0.6, 0.25],  # B
+        [0.15, 0.75],  # C
+        [0.35, 0.75],  # D
+        [0.65, 0.75],  # E
+        [0.85, 0.75],  # F
+    ])[:, None, :]  # shape (6, 1, 2)
+
+    # Categoría 0:
+    if np.random.rand() < 0.5:
+        # A == B y C == D y E != F
+        shape_ab = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shape_cd = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shape_e = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shape_f = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shapes_neg = [shape_ab, shape_ab.clone(), shape_cd, shape_cd.clone(), shape_e, shape_f]
+        xy, size, shapes_neg, colors_neg = decorate_shapes(
+            shapes_neg,
+            max_size=max_size, min_size=min_size, color=color, sizes=[[max_size]] * 6
+        )
+        sample_neg = (fixed_xy, size, shapes_neg, colors_neg)
+    else:
+        # A != B y C != D y E == F
+        shape_a = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shape_b = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shape_c = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shape_d = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shape_ef = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shapes_neg = [shape_a, shape_b, shape_c, shape_d, shape_ef, shape_ef.clone()]
+        xy, size, shapes_neg, colors_neg = decorate_shapes(
+            shapes_neg,
+            max_size=max_size, min_size=min_size, color=color, sizes=[[max_size]] * 6
+        )
+        sample_neg = (fixed_xy, size, shapes_neg, colors_neg)
+
+    # Categoría 1:
+    if np.random.rand() < 0.5:
+        # A == B y C != D y E == F
+        shape_ab = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shape_c = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shape_d = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shape_ef = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shapes_pos = [shape_ab, shape_ab.clone(), shape_c, shape_d, shape_ef, shape_ef.clone()]
+        xy, size, shapes_pos, colors_pos = decorate_shapes(
+            shapes_pos,
+            max_size=max_size, min_size=min_size, color=color, sizes=[[max_size]] * 6
+        )
+        sample_pos = (fixed_xy, size, shapes_pos, colors_pos)
+    else:
+        # A != B y C == D y E != F
+        shape_a = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shape_b = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shape_cd = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shape_e = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shape_f = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
+        shapes_pos = [shape_a, shape_b, shape_cd, shape_cd.clone(), shape_e, shape_f]
+        xy, size, shapes_pos, colors_pos = decorate_shapes(
+            shapes_pos,
+            max_size=max_size, min_size=min_size, color=color, sizes=[[max_size]] * 6
+        )
+        sample_pos = (fixed_xy, size, shapes_pos, colors_pos)
+
     return sample_neg, sample_pos
 
 
