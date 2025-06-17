@@ -17,7 +17,9 @@ TASKS_IDX = {
     13: "task_svrt_13", 14: "task_svrt_14", 15: "task_svrt_15", 16: "task_svrt_16",
     17: "task_svrt_17", 18: "task_svrt_18", 19: "task_svrt_19", 20: "task_svrt_20",
     21: "task_svrt_21", 22: "task_svrt_22", 23: "task_svrt_23", 24: "task_MTS",
-    25: "task_SD", 26: "task_SOSD", 27: "task_RMTS"
+    25: "task_SD", 26: "task_SOSD", 27: "task_RMTS", 28: "task_sym_classification",
+    29: "task_sym_MTS", 30: "task_sym_SD", 31: "task_sym_SOSD",
+    32: "task_sym_RMTS"
 }
 
 def generate_single_example(args):
