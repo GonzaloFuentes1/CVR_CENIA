@@ -7,7 +7,7 @@ Este directorio contiene los scripts y configuraciones necesarios para entrenar 
 Antes de entrenar cualquier modelo, debes generar los datasets para cada tarea. Ejecuta los siguientes comandos desde la raíz del proyecto:
 
 ```sh
-python generate_dataset_update.py --data_dir "experiments/images" --task_idx 27 --train_size 98000 --val_size 14000 --test_size 56000
+python generate_dataset_parallel.py --data_dir "experiments/images" --task_idx 27 --train_size 98000 --val_size 14000 --test_size 56000 --num_workers 30
 
 python generate_dataset_parallel.py --data_dir "experiments/images" --task_idx 26 --train_size 49000 --val_size 7000 --test_size 28000 --num_workers 30
 
