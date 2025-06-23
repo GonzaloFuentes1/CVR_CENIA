@@ -351,7 +351,7 @@ def task_svrt_4(
     min_size: float = 0.2,
     color: bool = False,
     rigid_type: str = 'polygon',
-    max_tries: int = 10000,
+    max_tries: int = 1000,
 ):
     """
     SVRT #4 – Devuelve (sample_neg, sample_pos).
@@ -379,20 +379,26 @@ def task_svrt_4(
     outer.scale(size_outer)
     inner.scale(size_inner)
 
+    done_flag = False
     for _ in range(max_tries):
         xy_outer = np.random.rand(2) * (1 - size_outer - 2 * border_margin) + size_outer / 2 + border_margin
         xy_inner_rel = sample_position_inside_1(outer, inner, scale=1 - (size_inner / size_outer))
-        if len(xy_inner_rel) == 0:
-            continue
-        xy_inner = xy_inner_rel[0] + xy_outer
-
         contour_outer = outer.get_contour() + xy_outer
-        contour_inner = inner.get_contour() + xy_inner
-
-        path_outer = Path(contour_outer)
-        if ((0 <= contour_inner).all() and (contour_inner <= 1).all()
-            and path_outer.contains_points(contour_inner).all()):
+        contour_inner = inner.get_contour()
+        if len(xy_inner_rel) > 0:
+            for pos in xy_inner_rel:
+                xy_inner = pos * size_outer + xy_outer
+                contour_inner_temp = contour_inner + xy_inner
+                if Path(contour_outer).contains_points(contour_inner_temp).all():
+                    done_flag = True
+                    break
+        if done_flag:
             break
+        else:
+            outer = create_shape(shape_mode, rigid_type, radius, hole_radius, outer_sides, fourier_terms)
+            inner = create_shape(shape_mode, rigid_type, radius, hole_radius, inner_sides, fourier_terms)
+            outer.scale(size_outer)
+            inner.scale(size_inner)
     else:
         raise RuntimeError("No se pudo generar clase positiva con inclusión real.")
 
@@ -603,10 +609,6 @@ def task_svrt_8(
 
     # posición global del centro del outer
     xy_outer = np.random.rand(2) * (1 - size_outer) + size_outer / 2
-
-
-    contour_outer = outer.get_contour() * size_outer + xy_outer
-    contour_inner = inner.get_contour() * size_inner
 
     max_attempts = 1000
 
@@ -1853,7 +1855,8 @@ def task_sym_classification(
     max_size: float = 0.4,
     min_size: float | None = 0.2,
     color: bool = False,
-    rigid_type: str = 'polygon'
+    rigid_type: str = 'polygon',
+    symm_rotation: bool = False
 ):
     """
     Clase 0: Figura es asimétrica
@@ -1873,7 +1876,7 @@ def task_sym_classification(
     # Clase 1: Figura simétrica
     shape_pos = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
     # Aplicar simetría
-    shape_pos.symmetrize(rotate = True)
+    shape_pos.symmetrize(rotate = symm_rotation)
     sample_pos = decorate_shapes(
         [shape_pos],
         max_size=max_size,
@@ -1898,7 +1901,8 @@ def task_sym_MTS(
     max_size: float = 0.4,
     min_size: float | None = 0.2,
     color: bool = False,
-    rigid_type: str = 'polygon'
+    rigid_type: str = 'polygon',
+    symm_rotation: bool = False
 ):
     """
     Tarea de clasificación de simetría MTS.
@@ -1917,11 +1921,11 @@ def task_sym_MTS(
 
     if np.random.rand() < 0.5:
         # Comparten simetría
-        shapes[0].symmetrize(rotate=True)  # A simétrica
-        shapes[1].symmetrize(rotate=True)
+        shapes[0].symmetrize(rotate=symm_rotation)  # A simétrica
+        shapes[1].symmetrize(rotate=symm_rotation)
     else:
         # A y B comparten ser asimétricas, C es simétrica
-        shapes[2].symmetrize(rotate=True)  # C simétrica
+        shapes[2].symmetrize(rotate=symm_rotation)  # C simétrica
 
     xy, size, shapes_neg, colors_neg = decorate_shapes(
         shapes,
@@ -1933,11 +1937,11 @@ def task_sym_MTS(
     shapes = [create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate) for _ in range(3)]
     if np.random.rand() < 0.5:
         # A y C comparten simetría, B es asimétrica
-        shapes[0].symmetrize(rotate=True)  # A simétrica
-        shapes[2].symmetrize(rotate=True)  # C simétrica
+        shapes[0].symmetrize(rotate=symm_rotation)  # A simétrica
+        shapes[2].symmetrize(rotate=symm_rotation)  # C simétrica
     else:
         # A y C son asimétricas, B es simétrica
-        shapes[1].symmetrize(rotate=True)
+        shapes[1].symmetrize(rotate=symm_rotation)
     xy, size, shapes_pos, colors_pos = decorate_shapes(
         shapes,
         max_size=max_size, min_size=min_size, color=color, sizes=[[max_size]] * 3
@@ -1960,7 +1964,8 @@ def task_sym_SD(
     max_size: float = 0.4,
     min_size: float | None = 0.2,
     color: bool = False,
-    rigid_type: str = 'polygon'
+    rigid_type: str = 'polygon',
+    symm_rotation: bool = False
 ):
     """
     Tarea de clasificación de simetría SD.
@@ -1971,7 +1976,7 @@ def task_sym_SD(
     # Clase 0: Una figura simétrica y una asimétrica
     shape1 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
     shape2 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
-    shape2.symmetrize(rotate=True)  # Hacemos que shape2 sea simétrica
+    shape2.symmetrize(rotate=symm_rotation)  # Hacemos que shape2 sea simétrica
     sample_neg = decorate_shapes(
         [shape1, shape2],
         max_size=max_size,
@@ -1984,8 +1989,8 @@ def task_sym_SD(
     shape2 = create_shape(shape_mode, rigid_type, radius, hole_radius, n_sides, fourier_terms, symm_rotate)
     if np.random.rand() < 0.5:
         # Ambas figuras simétricas
-        shape1.symmetrize(rotate=True)
-        shape2.symmetrize(rotate=True)
+        shape1.symmetrize(rotate=symm_rotation)
+        shape2.symmetrize(rotate=symm_rotation)
     sample_pos = decorate_shapes(
         [shape1, shape2],
         max_size=max_size,
@@ -2010,15 +2015,17 @@ def task_sym_SOSD(
     max_size: float = 0.4,
     min_size: float | None = 0.2,
     color: bool = False,
-    rigid_type: str = 'polygon'
+    rigid_type: str = 'polygon',
+    symm_rotation: bool = False
 ):
     """
     Tarea de clasificación de simetría SOSD.
     Clase 1: Ambos pares de figuras tienen misma relación de simetría
-    Es decir, si en un par ambas son simétricas, en el otro par debe ocurrir lo mismo.
-    Si en un par una es simétrica y la otra no, en el otro par debe ocurrir lo mismo.
-    Si en un par ambas son asimétricas, en el otro par debe ocurrir lo mismo. 
-    -------Duda: Consideramos este último caso?---------
+    Es decir, si en un par ambas son simétricas, en el otro par ambas tienen el mismo estatus, i.e. 
+    ambas son simétricas o ambas son asimétricas,
+    y si en un par ambas son asimétricas, en el otro par ambas tienen el mismo estatus, i.e.
+    ambas son simétricas o ambas son asimétricas.
+    Si en un par una figura es simétrica y la otra asimétrica, en el otro par también debe ser así.
 
     Clase 0: Un par de figuras tiene una relación de simetría diferente al otro par.
     """
@@ -2036,29 +2043,29 @@ def task_sym_SOSD(
     if np.random.rand() < 0.5:
         # Relación de arriba será 1 sim y 1 asim
         if np.random.rand() < 0.5:
-            shapes[0].symmetrize(rotate=True)  # A simétrica
+            shapes[0].symmetrize(rotate=symm_rotation)  # A simétrica
         else:
-            shapes[1].symmetrize(rotate=True)
+            shapes[1].symmetrize(rotate=symm_rotation)
         # Relación de abajo puede ser sim sim o asim asim
         if np.random.rand() < 0.5:
-            shapes[2].symmetrize(rotate=True)
-            shapes[3].symmetrize(rotate=True)
+            shapes[2].symmetrize(rotate=symm_rotation)
+            shapes[3].symmetrize(rotate=symm_rotation)
         else:
             # Ambas asimétricas
             pass
     else:
         # Relación de arriba será sim sim o asim asim
         if np.random.rand() < 0.5:
-            shapes[0].symmetrize(rotate=True)
-            shapes[1].symmetrize(rotate=True)
+            shapes[0].symmetrize(rotate=symm_rotation)
+            shapes[1].symmetrize(rotate=symm_rotation)
         else:
             # Ambas asimétricas
             pass  
         # Relación de abajo será 1 sim y 1 asim
         if np.random.rand() < 0.5:
-            shapes[2].symmetrize(rotate=True)
+            shapes[2].symmetrize(rotate=symm_rotation)
         else:
-            shapes[3].symmetrize(rotate=True)
+            shapes[3].symmetrize(rotate=symm_rotation)
     xy, size, shapes_neg, colors_neg = decorate_shapes(
         shapes,
         max_size=max_size, min_size=min_size, color=color, sizes=[[max_size]] * 4
@@ -2070,26 +2077,30 @@ def task_sym_SOSD(
     if np.random.rand() < 0.5:
         # Relación de arriba será 1 sim y 1 asim
         if np.random.rand() < 0.5:
-            shapes[0].symmetrize(rotate=True)  # A simétrica
+            shapes[0].symmetrize(rotate=symm_rotation)  # A simétrica
         else:
-            shapes[1].symmetrize(rotate=True)
+            shapes[1].symmetrize(rotate=symm_rotation)
         # Relación de abajo será igual a la de arriba (1 y 1)
         if np.random.rand() < 0.5:
-            shapes[2].symmetrize(rotate=True)
+            shapes[2].symmetrize(rotate=symm_rotation)  
         else:
-            shapes[3].symmetrize(rotate=True)
+            shapes[3].symmetrize(rotate=symm_rotation)
     else:
         # Relación de arriba será sim sim o asim asim
         if np.random.rand() < 0.5:
-            shapes[0].symmetrize(rotate=True)
-            shapes[1].symmetrize(rotate=True)
-            # Relación de abajo será igual a la de arriba
-            shapes[2].symmetrize(rotate=True)
-            shapes[3].symmetrize(rotate=True)
+            shapes[0].symmetrize(rotate=symm_rotation)
+            shapes[1].symmetrize(rotate=symm_rotation)
         else:
             # Ambas asimétricas
-            # Relación de abajo será igual a la de arriba
             pass  
+
+        # Relación de abajo también será de paridad (sim sim o asim asim)
+        if np.random.rand() < 0.5:
+            shapes[2].symmetrize(rotate=symm_rotation)
+            shapes[3].symmetrize(rotate=symm_rotation)
+        else:
+            # Ambas asimétricas
+            pass
 
     xy, size, shapes_pos, colors_pos = decorate_shapes(
         shapes,
@@ -2113,12 +2124,14 @@ def task_sym_RMTS(
     max_size: float = 0.4,
     min_size: float | None = 0.2,
     color: bool = False,
-    rigid_type: str = 'polygon'
+    rigid_type: str = 'polygon',
+    symm_rotation: bool = False
 ):
     """
     Tarea de clasificación de simetría RMTS.
     Clase 0: par de la izquierda tiene misma relación de simetría que el par de arriba, mientras que el par de la derecha tiene una relación diferente.
     Clase 1: par de la izquierda tiene relación de simetría diferente al par de arriba, mientras que el par de la derecha tiene la misma relación que el par de arriba.
+    Las relaciones están entendidas como SOSD, es decir, si en un par ambas figuras son simétricas, se considera misma relación en otro par si ambas son simétricas o ambas son asimétricas, y lo mismo si en un par ambas son asimétricas.
     """
     max_size *= 0.4 # Ajuste para que figuras quepan sin superponerse, y permitir separar los pares
 
@@ -2136,38 +2149,41 @@ def task_sym_RMTS(
     if np.random.rand() < 0.5:
         # arriba relación 1 sim y 1 asim
         if np.random.rand() < 0.5:
-            shapes[0].symmetrize(rotate=True)
+            shapes[0].symmetrize(rotate=symm_rotation)
         else:
-            shapes[1].symmetrize(rotate=True)
+            shapes[1].symmetrize(rotate=symm_rotation)
         # izquierda relación 1 sim y 1 asim
         if np.random.rand() < 0.5:
-            shapes[2].symmetrize(rotate=True)
+            shapes[2].symmetrize(rotate=symm_rotation)
         else:
-            shapes[3].symmetrize(rotate=True)
+            shapes[3].symmetrize(rotate=symm_rotation)
         # derecha ambos sim o ambos asim
         if np.random.rand() < 0.5:
-            shapes[4].symmetrize(rotate=True)
-            shapes[5].symmetrize(rotate=True)
+            shapes[4].symmetrize(rotate=symm_rotation)
+            shapes[5].symmetrize(rotate=symm_rotation)
         else:
             # Ambas asimétricas
             pass
     else:
         # arriba relación sim sim o asim asim
         if np.random.rand() < 0.5:
-            shapes[0].symmetrize(rotate=True)
-            shapes[1].symmetrize(rotate=True)
-            # izquierda misma relación
-            shapes[2].symmetrize(rotate=True)
-            shapes[3].symmetrize(rotate=True)
+            shapes[0].symmetrize(rotate=symm_rotation)
+            shapes[1].symmetrize(rotate=symm_rotation)
         else:
             # Ambas asimétricas
-            # izquierda misma relación
+            pass
+        # izquierda relación sim sim o asim asim
+        if np.random.rand() < 0.5:
+            shapes[2].symmetrize(rotate=symm_rotation)
+            shapes[3].symmetrize(rotate=symm_rotation)
+        else:
+            # Ambas asimétricas
             pass
         # derecha relación 1 sim y 1 asim
         if np.random.rand() < 0.5:
-            shapes[4].symmetrize(rotate=True)
+            shapes[4].symmetrize(rotate=symm_rotation)
         else:
-            shapes[5].symmetrize(rotate=True)
+            shapes[5].symmetrize(rotate=symm_rotation)
     xy, size, shapes_neg, colors_neg = decorate_shapes(
         shapes,
         max_size=max_size, min_size=min_size, color=color, sizes=[[max_size]] * 6
@@ -2180,38 +2196,41 @@ def task_sym_RMTS(
     if np.random.rand() < 0.5:
         # arriba relación 1 sim y 1 asim
         if np.random.rand() < 0.5:
-            shapes[0].symmetrize(rotate=True)
+            shapes[0].symmetrize(rotate=symm_rotation)
         else:
-            shapes[1].symmetrize(rotate=True)
+            shapes[1].symmetrize(rotate=symm_rotation)
         # izquierda relación sim sim o asim asim
         if np.random.rand() < 0.5:
-            shapes[2].symmetrize(rotate=True)
-            shapes[3].symmetrize(rotate=True)
+            shapes[2].symmetrize(rotate=symm_rotation)
+            shapes[3].symmetrize(rotate=symm_rotation)
         else:
             # Ambas asimétricas
             pass
         # derecha relación 1 sim y 1 asim
         if np.random.rand() < 0.5:
-            shapes[4].symmetrize(rotate=True)
+            shapes[4].symmetrize(rotate=symm_rotation)
         else:
-            shapes[5].symmetrize(rotate=True)
+            shapes[5].symmetrize(rotate=symm_rotation)
     else:
         # arriba relación sim sim o asim asim
         if np.random.rand() < 0.5:
-            shapes[0].symmetrize(rotate=True)
-            shapes[1].symmetrize(rotate=True)
-            # derecha misma relación
-            shapes[4].symmetrize(rotate=True)
-            shapes[5].symmetrize(rotate=True)
+            shapes[0].symmetrize(rotate=symm_rotation)
+            shapes[1].symmetrize(rotate=symm_rotation)
         else:
             # Ambas asimétricas
-            # derecha misma relación
             pass
         # izquierda relación 1 sim y 1 asim
         if np.random.rand() < 0.5:
-            shapes[2].symmetrize(rotate=True)
+            shapes[2].symmetrize(rotate=symm_rotation)
         else:
-            shapes[3].symmetrize(rotate=True)
+            shapes[3].symmetrize(rotate=symm_rotation)
+        # derecha relación sim sim o asim asim
+        if np.random.rand() < 0.5:
+            shapes[4].symmetrize(rotate=symm_rotation)
+            shapes[5].symmetrize(rotate=symm_rotation)
+        else:
+            # Ambas asimétricas
+            pass
     xy, size, shapes_pos, colors_pos = decorate_shapes(
         shapes,
         max_size=max_size, min_size=min_size, color=color, sizes=[[max_size]] * 6

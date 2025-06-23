@@ -99,45 +99,77 @@ if __name__ == '__main__':
     parser.add_argument('--min_size', type=float, default=0.2)
     parser.add_argument('--color', type=bool, default=False)
     parser.add_argument('--rigid_type', type=str, default='polygon')
+    parser.add_argument('--symm_rotation', type=bool, default=False)
 
     args = parser.parse_args()
     logging.info(f'JOB PID {os.getpid()}')
     t0 = time()
 
     base_kwargs = build_kwargs(args)
+    base_sym_kwargs = base_kwargs.copy()
+    base_sym_kwargs['symm_rotation'] = args.symm_rotation
 
     if args.task_idx == 0:
         for task_idx, task_name in TASKS_IDX.items():
-            try:
-                generate_dataset_parallel(
-                    task_name=task_name,
-                    base_kwargs=base_kwargs,
-                    data_path=args.data_dir,
-                    image_size=args.image_size,
-                    seed=args.seed,
-                    train_size=args.train_size,
-                    val_size=args.val_size,
-                    test_size=args.test_size,
-                    num_workers=args.num_workers
-                )
-            except Exception as e:
-                print(f"❌ Error en {task_name}: {e}")
+            # Incluir argumento de rotación simétrica para tareas de simetría
+            if 'sym' in task_name:
+                try:
+                    generate_dataset_parallel(
+                        task_name=task_name,
+                        base_kwargs=base_sym_kwargs,
+                        data_path=args.data_dir,
+                        image_size=args.image_size,
+                        seed=args.seed,
+                        train_size=args.train_size,
+                        val_size=args.val_size,
+                        test_size=args.test_size,
+                        num_workers=args.num_workers
+                    )
+                except Exception as e:
+                    print(f"❌ Error en {task_name}: {e}")
+            else:
+                try:
+                    generate_dataset_parallel(
+                        task_name=task_name,
+                        base_kwargs=base_kwargs,
+                        data_path=args.data_dir,
+                        image_size=args.image_size,
+                        seed=args.seed,
+                        train_size=args.train_size,
+                        val_size=args.val_size,
+                        test_size=args.test_size,
+                        num_workers=args.num_workers
+                    )
+                except Exception as e:
+                    print(f"❌ Error en {task_name}: {e}")
     else:
         try:
             task_name = TASKS_IDX[args.task_idx]
         except KeyError:
             raise ValueError(f"Tarea con índice {args.task_idx} no registrada.")
-
-        generate_dataset_parallel(
-            task_name=task_name,
-            base_kwargs=base_kwargs,
-            data_path=args.data_dir,
-            image_size=args.image_size,
-            seed=args.seed,
-            train_size=args.train_size,
-            val_size=args.val_size,
-            test_size=args.test_size,
-            num_workers=args.num_workers
-        )
+        if 'sym' in task_name:
+            generate_dataset_parallel(
+                task_name=task_name,
+                base_kwargs=base_sym_kwargs,
+                data_path=args.data_dir,
+                image_size=args.image_size,
+                seed=args.seed,
+                train_size=args.train_size,
+                val_size=args.val_size,
+                test_size=args.test_size,
+                num_workers=args.num_workers
+            )
+        else:
+            generate_dataset_parallel(
+                task_name=task_name,
+                base_kwargs=base_kwargs,
+                data_path=args.data_dir,
+                image_size=args.image_size,
+                seed=args.seed,
+                train_size=args.train_size,
+                val_size=args.val_size,
+                test_size=args.test_size,
+                num_workers=args.num_workers
+            )
 
     print(f"✅ Finalizado en {time() - t0:.2f} segundos.")
