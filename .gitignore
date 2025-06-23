@@ -29,3 +29,11 @@ logs/
 # IPython
 profile_default/
 ipython_config.py
+
+# Imagenes
+*.png
+*.jpg
+*.jpeg
+
+# Pytorch models
+*.pth

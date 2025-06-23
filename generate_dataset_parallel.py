@@ -1,11 +1,12 @@
 import argparse
 import logging
 import os
+from multiprocessing import Pool
+from time import time
+
 import numpy as np
 from PIL import Image
 from tqdm import tqdm
-from time import time
-from multiprocessing import Pool
 
 from data_generation.tasks_generation_cenia import TASKS_SVRT
 from data_generation.utils import render_scene_safe
@@ -47,16 +48,16 @@ def generate_dataset_parallel(task_name, base_kwargs, data_path, image_size, see
 
     splits = {
         'train': (seed, train_size),
-        'val': (seed + 1, val_size),
-        'test': (seed + 2, test_size),
+        'val': (seed + train_size + 1_000_000, val_size),
+        'test': (seed + train_size + val_size + 2_000_000, test_size),
     }
 
+
     for split, (split_seed, n_samples) in splits.items():
-        np.random.seed(split_seed)
         print(f"[{task_name}] Generando {n_samples} ejemplos para {split}...")
 
         args_list = [
-            (i, split, task_name, image_size, base_kwargs, data_path)
+            (i, split, task_name, image_size, base_kwargs, data_path, split_seed + i)
             for i in range(n_samples)
         ]
 
@@ -65,7 +66,8 @@ def generate_dataset_parallel(task_name, base_kwargs, data_path, image_size, see
                       total=n_samples, desc=f"{task_name} | {split}"))
 
     print(f"[{task_name}] ✔ Dataset generado en: {task_path}")
-
+    
+    
 def build_kwargs(args):
     return dict(
         shape_mode=args.shape_mode,
@@ -78,6 +80,7 @@ def build_kwargs(args):
         color=args.color,
         rigid_type=args.rigid_type,
     )
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -172,4 +175,5 @@ if __name__ == '__main__':
                 num_workers=args.num_workers
             )
 
+    print(f"✅ Finalizado en {time() - t0:.2f} segundos.")
     print(f"✅ Finalizado en {time() - t0:.2f} segundos.")
